@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f3d24">
+<title>🎄 Rifa Solidária — Carretinha de Natal</title>
+<meta name="description" content="Escolha seu número da Rifa Solidária da Carretinha de Natal.">
+<meta property="og:title" content="🎄 Rifa Solidária — Carretinha de Natal">
+<meta property="og:description" content="Escolha seu número e ajude a Carretinha de Natal!">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎄</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--verde:#0f3d24;--verde2:#166534;--verde-claro:#e7f3ea;--verm:#b91c1c;--verm2:#dc2626;--ouro:#c9a227;--ouro2:#e6c45c;--creme:#fbf8f1;--borda:#e6e0d2;--txt:#1c2a22;--txt2:#55635a}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 Inter,system-ui,sans-serif;color:var(--txt);background:var(--creme);-webkit-font-smoothing:antialiased;padding-bottom:110px}
+.hero{background:radial-gradient(700px 300px at 10% 0%,rgba(201,162,39,.3),transparent 60%),radial-gradient(600px 300px at 100% 100%,rgba(185,28,28,.35),transparent 60%),linear-gradient(160deg,#0b2e1b,#0f3d24 55%,#13502f);color:#fff;padding:34px 18px 40px;text-align:center;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:repeating-linear-gradient(90deg,var(--verm2) 0 18px,#fff 18px 26px,var(--ouro2) 26px 44px,#fff 44px 52px)}
+.hero .arv{font-size:54px}
+.hero h1{font-family:'Playfair Display',serif;font-size:32px;margin:6px 0 4px}
+.hero p{margin:4px auto;color:#d7ecdd;max-width:560px}
+.hero .preco{display:inline-block;margin-top:12px;background:linear-gradient(135deg,var(--ouro2),var(--ouro));color:#3b2c00;font-weight:800;padding:8px 18px;border-radius:999px;font-size:17px}
+.flocos{position:absolute;inset:0;pointer-events:none}
+.flocos i{position:absolute;top:-20px;color:#fff;opacity:.55;animation:cai linear infinite}
+@keyframes cai{to{transform:translateY(420px) rotate(360deg)}}
+main{max-width:980px;margin:0 auto;padding:18px 14px;display:flex;flex-direction:column;gap:18px}
+.card{background:#fff;border:1px solid var(--borda);border-radius:16px;padding:18px;box-shadow:0 6px 24px rgba(15,61,36,.07)}
+.card h2{margin:0 0 12px;font-size:18px;color:var(--verde);font-family:'Playfair Display',serif}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stats div{background:var(--creme);border:1px solid var(--borda);border-radius:12px;padding:10px;text-align:center}
+.stats b{display:block;font-size:22px;color:var(--verde)}
+.stats small{color:var(--txt2)}
+.barra{height:10px;background:#efe9da;border-radius:99px;overflow:hidden;margin-top:12px}
+.barra i{display:block;height:100%;background:linear-gradient(90deg,var(--verm2),var(--ouro))}
+.premios{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.premio{border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:#fff}
+.premio .foto{height:140px;background:linear-gradient(135deg,#f5efe0,#efe6cf);display:grid;place-items:center;font-size:44px}
+.premio .foto img{width:100%;height:100%;object-fit:cover}
+.premio .c{padding:10px 12px}
+.premio .c b{display:block}
+.premio .c small{color:var(--txt2)}
+.ordem{display:inline-block;background:var(--verm);color:#fff;font-weight:800;font-size:11px;padding:2px 8px;border-radius:999px;margin-bottom:4px}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.filtros button{border:1px solid var(--borda);background:#fff;border-radius:999px;padding:7px 14px;font-weight:600;cursor:pointer;font:inherit;font-size:13.5px}
+.filtros button.on{background:var(--verde2);color:#fff;border-color:var(--verde2)}
+.filtros input{flex:1;min-width:140px;border:1px solid var(--borda);border-radius:999px;padding:8px 14px;font:inherit}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:7px}
+.n{border-radius:12px;padding:8px 2px;text-align:center;font-weight:800;font-size:16px;border:2px solid transparent;user-select:none;font-variant-numeric:tabular-nums;position:relative}
+.n small{display:block;font-size:9.5px;font-weight:600;opacity:.85}
+.n.d{background:var(--verde-claro);color:var(--verde2);border-color:#bfe0c9;cursor:pointer}
+.n.d:hover{transform:translateY(-1px)}
+.n.d.sel{background:var(--verde2);color:#fff;border-color:var(--ouro2);box-shadow:0 0 0 2px var(--ouro2)}
+.n.v{background:#fdecec;color:#b45a5a;border-color:#f3c6c6;cursor:not-allowed}
+.n.r{background:#fff4e5;color:#a86a12;border-color:#f6cf98;cursor:not-allowed}
+.legenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--txt2);margin-top:12px}
+.legenda i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:4px;vertical-align:-2px}
+.pix{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fbf4dc;border:1px dashed var(--ouro);border-radius:12px;padding:12px}
+.pix code{font-size:16px;font-weight:700;word-break:break-all;flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:12px;padding:11px 16px;font-weight:700;cursor:pointer;text-decoration:none;font:inherit;font-weight:700}
+.btn.verde{background:linear-gradient(135deg,var(--verde2),var(--verde));color:#fff}
+.btn.zap{background:#25d366;color:#053d1d}
+.btn.claro{background:#fff;border:1px solid var(--borda);color:var(--txt)}
+.carrinho{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--borda);box-shadow:0 -8px 30px rgba(0,0,0,.12);padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;z-index:10}
+.carrinho .info{flex:1;min-width:180px;max-width:520px}
+.carrinho b{color:var(--verde)}
+.oculto{display:none!important}
+.vazio{text-align:center;color:var(--txt2);padding:40px 16px}
+footer{text-align:center;color:var(--txt2);font-size:12.5px;padding:10px}
+.toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--verde);color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:20}
+@media (max-width:560px){.hero h1{font-size:26px}.stats b{font-size:18px}.grid{grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="flocos" id="flocos"></div>
+  <div class="arv">🎄</div>
+  <h1 id="titulo">Rifa Solidária</h1>
+  <p id="subtitulo">Carretinha de Natal</p>
+  <p id="sorteio"></p>
+  <span class="preco oculto" id="preco"></span>
+</header>
+
+<main id="conteudo">
+  <div class="card vazio">Carregando a rifa…</div>
+</main>
+
+<div class="carrinho oculto" id="carrinho">
+  <div class="info"><b id="car-qtd"></b> · <span id="car-nums"></span><br><small>Total: <b id="car-total"></b></small></div>
+  <button class="btn claro" id="car-limpar">Limpar</button>
+  <a class="btn zap" id="car-zap" target="_blank" rel="noopener">Pedir pelo WhatsApp</a>
+</div>
+
+<footer>Feito com 💚 pela equipe da Carretinha · Conecta Finanças</footer>
+
+<script>
+'use strict';
+const SUPABASE_URL = 'https://fclpcdtnmlpjfgovubra.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjbHBjZHRubWxwamZnb3Z1YnJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUyODM3NDUsImV4cCI6MjEwMDg1OTc0NX0.SYo7qhk2Dg33AQO1Rcpm8H6RbJ5ieZGLQR1hcUU16-A';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false, autoRefreshToken: false, storageKey: 'rifa-publica' } });
+const slug = new URLSearchParams(location.search).get('c') || '';
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const brl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const dataBR = (d) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '');
+const n2 = (n) => String(n).padStart(2, '0');
+let D = null, filtro = 'todos', busca = '';
+const sel = new Set();
+
+(function () { const b = $('#flocos'); for (let i = 0; i < 16; i++) { const f = document.createElement('i'); f.textContent = '❄'; f.style.left = Math.random() * 100 + '%'; f.style.fontSize = 8 + Math.random() * 12 + 'px'; f.style.animationDuration = 7 + Math.random() * 10 + 's'; f.style.animationDelay = -Math.random() * 15 + 's'; b.appendChild(f); } })();
+
+function toast(m) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
+
+async function carregar() {
+  if (!slug) { $('#conteudo').innerHTML = '<div class="card vazio">Link incompleto. Peça o link da rifa para a organização.</div>'; return; }
+  const { data, error } = await sb.rpc('natal_publico', { p_slug: slug });
+  if (error) { if (!D) $('#conteudo').innerHTML = `<div class="card vazio">Não foi possível carregar a rifa agora. Tente novamente em instantes.</div>`; return; }
+  if (!data) { $('#conteudo').innerHTML = '<div class="card vazio">Esta rifa não está disponível (link desativado ou incorreto).</div>'; return; }
+  D = data;
+  // remove da seleção números que foram vendidos enquanto a pessoa escolhia
+  for (const x of [...sel]) { const it = D.numeros.find((k) => k[0] === x); if (!it || it[2] !== 'd') sel.delete(x); }
+  render();
+}
+
+function render() {
+  const nome = `${D.evento} ${D.ano}`;
+  document.title = `🎄 Rifa Solidária — ${nome}`;
+  $('#titulo').textContent = 'Rifa Solidária';
+  $('#subtitulo').textContent = D.nome && D.nome !== D.evento ? `${D.nome} · ${nome}` : nome;
+  $('#sorteio').textContent = D.data_sorteio ? `🎁 Sorteio em ${dataBR(D.data_sorteio)}` : '';
+  $('#preco').textContent = `${brl(D.valor_numero)} por número`; $('#preco').classList.remove('oculto');
+  const nums = D.numeros.filter((x) => x[2] !== 'c');
+  const disp = nums.filter((x) => x[2] === 'd').length, vend = nums.length - disp;
+  const lista = nums.filter((x) => (filtro === 'todos' || (filtro === 'disp' ? x[2] === 'd' : x[2] !== 'd')) && (!busca || String(x[0]).includes(busca.replace(/^0+/, ''))));
+  const urlFoto = (p) => (p ? sb.storage.from('natal-publico').getPublicUrl(p).data.publicUrl : '');
+  $('#conteudo').innerHTML = `
+    ${D.mensagem ? `<div class="card"><p style="margin:0;white-space:pre-line">${esc(D.mensagem)}</p></div>` : ''}
+    <div class="card">
+      <div class="stats"><div><b>${disp}</b><small>disponíveis</small></div><div><b>${vend}</b><small>já vendidos</small></div><div><b>${nums.length}</b><small>números no total</small></div></div>
+      <div class="barra"><i style="width:${nums.length ? (vend / nums.length) * 100 : 0}%"></i></div>
+    </div>
+    ${D.premios.length ? `<div class="card"><h2>🎁 Prêmios</h2><div class="premios">${D.premios.map((p, i) => `<div class="premio"><div class="foto">${p.foto ? `<img src="${esc(urlFoto(p.foto))}" alt="${esc(p.nome)}" loading="lazy">` : '🎁'}</div><div class="c"><span class="ordem">${p.ordem || i + 1}º prêmio</span><b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ''}</div></div>`).join('')}</div></div>` : ''}
+    <div class="card"><h2>🎟️ Escolha seus números</h2>
+      <div class="filtros">
+        <button data-f="todos" class="${filtro === 'todos' ? 'on' : ''}">Todos</button>
+        <button data-f="disp" class="${filtro === 'disp' ? 'on' : ''}">Disponíveis</button>
+        <button data-f="vend" class="${filtro === 'vend' ? 'on' : ''}">Vendidos</button>
+        <input type="search" id="busca" inputmode="numeric" placeholder="Procurar número…" value="${esc(busca)}">
+      </div>
+      ${nums.length ? `<div class="grid">${lista.map((x) => `<div class="n ${x[2]}${sel.has(x[0]) ? ' sel' : ''}" data-n="${x[0]}" title="${x[2] === 'd' ? 'Disponível — toque para escolher' : x[2] === 'r' ? 'Reservado' : 'Vendido'}">${n2(x[0])}<small>${x[2] === 'd' ? 'livre' : x[2] === 'r' ? 'reservado' : esc(x[3] || 'vendido')}</small></div>`).join('') || '<p class="vazio">Nenhum número encontrado.</p>'}</div>` : '<p class="vazio">Os números ainda não foram liberados.</p>'}
+      <div class="legenda"><span><i style="background:#e7f3ea;border:1px solid #bfe0c9"></i>Disponível</span><span><i style="background:#166534"></i>Selecionado</span><span><i style="background:#fdecec;border:1px solid #f3c6c6"></i>Vendido</span></div>
+    </div>
+    ${D.pix_chave ? `<div class="card"><h2>💳 Pagamento via PIX</h2><div class="pix"><code id="pix">${esc(D.pix_chave)}</code><button class="btn verde" id="copiar-pix">Copiar chave</button></div>${D.pix_nome ? `<p style="margin:8px 0 0;color:var(--txt2)">Recebedor: <b>${esc(D.pix_nome)}</b></p>` : ''}<p style="margin:8px 0 0;color:var(--txt2);font-size:13.5px">Depois de pagar, envie o comprovante pelo WhatsApp informando seus números. A reserva é confirmada pela equipe.</p></div>` : ''}
+    ${D.whatsapp ? `<div class="card" style="text-align:center"><p style="margin:0 0 10px">Dúvidas ou quer comprar um bloquinho inteiro?</p><a class="btn zap" href="https://wa.me/${esc(D.whatsapp)}?text=${encodeURIComponent('Olá! Vi a Rifa Solidária da ' + nome + ' e quero participar.')}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div>` : ''}`;
+  document.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { filtro = b.dataset.f; render(); }; });
+  const bi = $('#busca'); if (bi) bi.oninput = (e) => { busca = e.target.value.replace(/\D/g, ''); const pos = e.target.selectionStart; render(); const nb = $('#busca'); nb.focus(); nb.setSelectionRange(pos, pos); };
+  document.querySelectorAll('.n.d').forEach((el) => { el.onclick = () => { const k = +el.dataset.n; sel.has(k) ? sel.delete(k) : sel.add(k); el.classList.toggle('sel'); carrinho(); }; });
+  const cp = $('#copiar-pix'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(D.pix_chave); toast('Chave PIX copiada'); } catch (e) { prompt('Copie a chave PIX:', D.pix_chave); } };
+  carrinho();
+}
+
+function carrinho() {
+  const box = $('#carrinho');
+  if (!sel.size || !D) { box.classList.add('oculto'); return; }
+  const lista = [...sel].sort((a, b) => a - b);
+  const total = lista.length * Number(D.valor_numero);
+  $('#car-qtd').textContent = `${lista.length} número(s)`;
+  $('#car-nums').textContent = lista.map(n2).join(', ');
+  $('#car-total').textContent = brl(total);
+  const msg = `Olá! Quero comprar ${lista.length === 1 ? 'o número' : 'os números'} ${lista.map(n2).join(', ')} da Rifa Solidária (${D.evento} ${D.ano}). Total: ${brl(total)}.\nMeu nome: \nMeu telefone: `;
+  const zap = $('#car-zap');
+  if (D.whatsapp) { zap.href = `https://wa.me/${D.whatsapp}?text=${encodeURIComponent(msg)}`; zap.classList.remove('oculto'); }
+  else { zap.href = `https://wa.me/?text=${encodeURIComponent(msg)}`; }
+  box.classList.remove('oculto');
+}
+$('#car-limpar').onclick = () => { sel.clear(); render(); };
+
+carregar();
+setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
+</script>
+</body>
+</html>

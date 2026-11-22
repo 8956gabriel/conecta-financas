@@ -72,6 +72,7 @@ function Shell() {
             </button>
           ))}
         </nav>
+        <a className="natal-btn" href="/carretinha.html"><span className="ic">🎄</span><span>CARRETINHA DE NATAL<small>Rifas, despesas e prestação de contas</small></span></a>
         <div className="casal-tag">{app.casal?.nome}</div>
       </aside>
 
@@ -87,6 +88,7 @@ function Shell() {
                 </button>
               ))}
             </div>
+            <a className="natal-chip so-mobile" href="/carretinha.html">🎄 Carretinha</a>
             <button className="btn primario so-desktop" onClick={() => setNovo('despesa')}>+ Novo lançamento</button>
           </div>
         </header>
