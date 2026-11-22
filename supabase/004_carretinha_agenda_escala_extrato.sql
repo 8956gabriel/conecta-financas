@@ -107,3 +107,6 @@ grant execute on function public.natal_publico(text) to anon, authenticated;
 
 select string_agg(table_name, ', ' order by table_name) as novas_tabelas
   from information_schema.tables where table_schema = 'public' and table_name in ('natal_agenda','natal_escala','natal_pix_extrato');
+
+-- Nº de controle do bloquinho (numeração usada na planilha da equipe)
+alter table public.natal_bloquinhos add column if not exists controle int;

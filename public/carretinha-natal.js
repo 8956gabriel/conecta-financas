@@ -951,8 +951,9 @@ window.abrirNumero = abrirNumero;
 function formBloquinho(b) {
   const opPessoas = [['', '— selecione —'], ...S.pessoas.filter((p) => p.ativo || p.id === b.pessoa_id).map((p) => [p.id, p.nome])];
   abrirForm({
-    titulo: `📒 Bloquinho ${pad3(b.numero)}`,
+    titulo: `📒 Bloquinho ${b.controle ? 'nº ' + b.controle + ' · ' : ''}${faixaBloq(b)}`,
     campos: [
+      { k: 'controle', l: 'Nº de controle (planilha)', t: 'number' },
       { k: 'pessoa_id', l: 'Responsável (pessoa cadastrada)', t: 'select', op: opPessoas, full: true, dica: 'Ou digite o nome abaixo. Cadastre pessoas em “Pessoas e Responsáveis”.' },
       { k: 'responsavel_nome', l: 'Nome de quem retirou' },
       { k: 'telefone', l: 'Telefone', t: 'tel' },
@@ -977,6 +978,7 @@ function formBloquinho(b) {
       if (d.pessoa_id && !d.responsavel_nome) d.responsavel_nome = S.pessoaPorId[d.pessoa_id]?.nome;
       if (d.situacao !== 'disponivel' && !d.responsavel_nome) throw new Error('Informe quem retirou o bloquinho.');
       if (!(d.valor_total > 0)) delete d.valor_total;
+      d.controle = d.controle ? Math.round(d.controle) : null;
       return gravar('natal_bloquinhos', b.id, d);
     },
     excluir: PAPEL === 'admin' ? async () => {
@@ -1033,15 +1035,15 @@ function acertoBloq(b) {
 function listaBloquinhos() {
   const f = F.bloquinhos, q = f.q.trim().toLowerCase(), hj = hoje();
   const lista = S.bloquinhos.filter((b) => (!f.sit || (f.sit === 'naodev' ? ['entregue', 'em_andamento'].includes(b.situacao) : f.sit === 'falta' ? acertoBloq(b).falta > 0 && b.responsavel_nome : f.sit === 'acertado' ? acertoBloq(b).falta === 0 : b.situacao === f.sit))
-    && (!q || String(b.numero) === q.replace(/^0+/, '') || (b.responsavel_nome || '').toLowerCase().includes(q) || faixaBloq(b).includes(q.padStart(4, '0')) || (S.numsPorBloq[b.id] || []).some((n) => String(n.numero) === q.replace(/^0+/, ''))));
+    && (!q || String(b.numero) === q.replace(/^0+/, '') || String(b.controle ?? '') === q || (b.responsavel_nome || '').toLowerCase().includes(q) || faixaBloq(b).includes(q.padStart(4, '0')) || (S.numsPorBloq[b.id] || []).some((n) => String(n.numero) === q.replace(/^0+/, ''))));
   if (!S.bloquinhos.length) { $('#bloq-lista').innerHTML = `<div class="card vazio">Nenhum bloquinho gerado ainda.${pode('bloquinhos') ? ' Clique em <b>+ Gerar bloquinhos</b> ou importe a planilha em Configurações.' : ''}</div>`; return; }
-  const ac = lista.map((b) => ({ b, a: acertoBloq(b), r: resumoBloq(b) }));
+  const ac = [...lista].sort((x, y) => (x.controle ?? 9999) - (y.controle ?? 9999) || x.numero - y.numero).map((b) => ({ b, a: acertoBloq(b), r: resumoBloq(b) }));
   const tot = { valor: soma(ac, (x) => x.b.responsavel_nome ? Number(x.b.valor_total) : 0), pix: soma(ac, (x) => x.a.pix), din: soma(ac, (x) => x.a.din), total: soma(ac, (x) => x.a.total) };
   const linhas = ac.map(({ b, a, r }) => {
     const atrasado = ['entregue', 'em_andamento'].includes(b.situacao) && b.data_devolucao && b.data_devolucao < hj;
     const pct = Math.min(100, (a.total / Number(b.valor_total || 1)) * 100);
     return `<tr style="cursor:pointer" onclick="abrirBloquinho('${b.id}')">
-      <td><b>${pad3(b.numero)}</b></td><td style="white-space:nowrap"><b>${faixaBloq(b)}</b></td><td>${esc(b.responsavel_nome || '—')}${b.telefone ? `<br><small class="dica">${esc(b.telefone)}</small>` : ''}</td>
+      <td><b>${b.controle ?? '—'}</b></td><td><small class="dica">${pad3(b.numero)}</small></td><td style="white-space:nowrap"><b>${faixaBloq(b)}</b></td><td>${esc(b.responsavel_nome || '—')}${b.telefone ? `<br><small class="dica">${esc(b.telefone)}</small>` : ''}</td>
       <td class="num">${brl(b.valor_total)}<br><small class="dica">${r.total} números</small></td>
       <td class="num">${a.pix ? brl(a.pix) : '—'}</td><td class="num">${a.din ? brl(a.din) : '—'}</td>
       <td class="num"><b>${brl(a.total)}</b>${a.ag ? `<br><small class="dica">+${brl(a.ag)} aguardando</small>` : ''}<div class="barra" style="margin-top:4px;min-width:70px"><i style="width:${pct}%"></i></div></td>
@@ -1058,9 +1060,9 @@ function listaBloquinhos() {
       <div class="kpi v"><span>Falta acertar</span><b>${brl(Math.max(0, tot.valor - tot.total))}</b><small>${ac.filter((x) => x.b.responsavel_nome && x.a.falta > 0).length} bloquinho(s)</small></div>
     </div>
     <div class="tabela-wrap"><table>
-    <thead><tr><th>Nº</th><th>Números</th><th>Responsável</th><th class="num">Valor</th><th class="num">PIX</th><th class="num">Dinheiro</th><th class="num">Total acertado</th><th class="num">Falta</th><th>Situação</th><th></th></tr></thead>
-    <tbody>${linhas || '<tr><td colspan="10" class="vazio">Nenhum bloquinho com esses filtros.</td></tr>'}</tbody>
-    <tfoot><tr><td colspan="3">${lista.length} bloquinho(s)</td><td class="num">${brl(tot.valor)}</td><td class="num">${brl(tot.pix)}</td><td class="num">${brl(tot.din)}</td><td class="num">${brl(tot.total)}</td><td class="num">${brl(Math.max(0, tot.valor - tot.total))}</td><td colspan="2"></td></tr></tfoot></table></div>`;
+    <thead><tr><th title="Número de controle (planilha)">Nº</th><th title="Bloco pela faixa de números">Bloco</th><th>Números</th><th>Responsável</th><th class="num">Valor</th><th class="num">PIX</th><th class="num">Dinheiro</th><th class="num">Total acertado</th><th class="num">Falta</th><th>Situação</th><th></th></tr></thead>
+    <tbody>${linhas || '<tr><td colspan="11" class="vazio">Nenhum bloquinho com esses filtros.</td></tr>'}</tbody>
+    <tfoot><tr><td colspan="4">${lista.length} bloquinho(s)</td><td class="num">${brl(tot.valor)}</td><td class="num">${brl(tot.pix)}</td><td class="num">${brl(tot.din)}</td><td class="num">${brl(tot.total)}</td><td class="num">${brl(Math.max(0, tot.valor - tot.total))}</td><td colspan="2"></td></tr></tfoot></table></div>`;
 }
 
 // Acerto do bloquinho (criar ou EDITAR): informa o total em PIX e em dinheiro e o sistema ajusta os números
@@ -1455,7 +1457,7 @@ window.excelPrestacao = () => {
   add('Despesas', t.desp.map((d) => ({ Data: dataBR(d.data_compra), Descrição: d.descricao, Categoria: d.categoria, Produto: d.produto, Quantidade: Number(d.quantidade), 'Valor unitário': Number(d.valor_unitario), 'Valor total': Number(d.valor_total), 'Quem comprou': d.quem_comprou, 'Quem pagou': d.quem_pagou, Forma: d.forma_pagamento, Situação: d.situacao, Observações: d.observacoes })));
   add('Produtos', S.produtos.map((p) => ({ Produto: p.nome, Categoria: p.categoria, Comprado: Number(p.quantidade_comprada), Utilizado: Number(p.quantidade_utilizada), Restante: Number(p.quantidade_restante), Unidade: p.unidade, 'Valor total': Number(p.valor_total), Fornecedor: p.fornecedor, 'Data compra': dataBR(p.data_compra), Responsável: p.responsavel })));
   add('Prêmios', S.premios.map((p) => ({ Ordem: p.ordem_sorteio, Prêmio: p.nome, Descrição: p.descricao, 'Valor estimado': Number(p.valor_estimado), Origem: p.origem, 'Doou/comprou': p.doador_ou_comprador, 'Quem pagou': p.quem_pagou, Data: dataBR(p.data), Situação: p.situacao })));
-  add('Bloquinhos', S.bloquinhos.map((b) => { const r = resumoBloq(b); return { Bloquinho: pad3(b.numero), Responsável: b.responsavel_nome, Telefone: b.telefone, Retirada: dataBR(b.data_retirada), Devolução: dataBR(b.data_devolucao), Situação: ST_BLOQ[b.situacao], Vendidos: r.vendidos, Pagos: r.pagos, Recebido: r.recebido, 'Em aberto': r.aberto }; }));
+  add('Bloquinhos', S.bloquinhos.map((b) => { const r = resumoBloq(b); return { 'Nº controle': b.controle ?? '', Bloquinho: pad3(b.numero), Números: faixaBloq(b), Responsável: b.responsavel_nome, Telefone: b.telefone, Retirada: dataBR(b.data_retirada), Devolução: dataBR(b.data_devolucao), Situação: ST_BLOQ[b.situacao], Vendidos: r.vendidos, Pagos: r.pagos, Recebido: r.recebido, 'Em aberto': r.aberto }; }));
   add('Números', S.numeros.filter((n) => n.status !== 'disponivel').map((n) => ({ Número: n.numero, Bloquinho: pad3(S.bloqPorId[n.bloquinho_id]?.numero), Comprador: n.comprador_nome, Telefone: n.comprador_telefone, Vendedor: n.vendedor, Valor: Number(n.valor), Pago: Number(n.valor_pago), 'Data venda': dataBR(n.data_venda), Forma: n.forma_pagamento, Situação: ST_NUM[n.status] })));
   add('Recebimentos', S.pagamentos.map((p) => ({ Data: dataBR(p.data), Pagador: p.pagador, Número: S.numPorId[p.numero_id]?.numero, Bloquinho: pad3(S.bloqPorId[p.bloquinho_id]?.numero ?? ''), Valor: Number(p.valor), Forma: p.forma, 'Recebido por': p.recebido_por, Situação: p.situacao })));
   add('Doações e entradas', S.receitas.map((r) => ({ Data: dataBR(r.data), Tipo: r.tipo === 'doacao' ? 'Doação' : 'Outra', Descrição: r.descricao, Doador: r.doador, Valor: Number(r.valor), Forma: r.forma, 'Recebido por': r.recebido_por, Situação: r.situacao })));
@@ -1832,7 +1834,7 @@ function lerPlanilha(wb) {
     const bloco = (ini - 1) / porBloq + 1;
     if (usados[bloco]) { avisos.push(`SORTEIO RIFA: a faixa ${ini}-${fim} aparece para ${usados[bloco]} e ${b.resp} — mantido ${usados[bloco]}.`); continue; }
     usados[bloco] = b.resp;
-    blocos.push({ bloco, ini, fim, resp: b.resp });
+    blocos.push({ bloco, ini, fim, resp: b.resp, controle: typeof b.linha === 'number' ? b.linha : null });
   }
   const maxBloco = Math.max(0, ...blocos.map((b) => b.bloco));
   const faltando = []; for (let i = 1; i <= maxBloco; i++) if (!usados[i]) faltando.push(`${String((i - 1) * porBloq + 1).padStart(4, '0')}-${String(i * porBloq).padStart(4, '0')}`);
@@ -1932,6 +1934,7 @@ async function importarPlano() {
       const bl = S.bloquinhos.find((x) => x.numero === b.bloco); if (!bl) continue;
       const pes = pessoaPorChave[chave(b.resp)];
       const vendidosBl = (S.numsPorBloq[bl.id] || []).some((n) => n.status !== 'disponivel');
+      if (b.controle && bl.controle == null) { const { error } = await sb.from('natal_bloquinhos').update({ controle: b.controle }).eq('id', bl.id); if (error) throw error; }
       if (!bl.responsavel_nome || (chave(bl.responsavel_nome) !== chave(b.resp) && !vendidosBl)) {
         const { error } = await sb.from('natal_bloquinhos').update({ pessoa_id: pes?.id || null, responsavel_nome: tituloNome(b.resp), telefone: pes?.telefone || bl.telefone || null, situacao: bl.situacao === 'disponivel' ? 'entregue' : bl.situacao }).eq('id', bl.id);
         if (error) throw error; atrib++;
