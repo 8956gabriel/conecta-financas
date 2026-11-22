@@ -15,7 +15,7 @@ export function DataProvider({ session, children }) {
     if (error) return setEstado({ carregando: false, erro: error.message })
     if (!membro) return setEstado({ carregando: false, semCasal: true })
 
-    const [casal, membros, contas, cartoes, categorias, lancamentos, metas, movimentos] = await Promise.all([
+    const [casal, membros, contas, cartoes, categorias, lancamentos, metas, movimentos, compras] = await Promise.all([
       supabase.from('casais').select('*').eq('id', membro.casal_id).single(),
       supabase.from('membros').select('*').order('created_at'),
       supabase.from('contas').select('*').order('created_at'),
@@ -24,8 +24,9 @@ export function DataProvider({ session, children }) {
       supabase.from('lancamentos').select('*').order('data', { ascending: false }).limit(10000),
       supabase.from('metas').select('*').order('created_at'),
       supabase.from('metas_movimentos').select('*').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(5000),
+      supabase.from('compras').select('id,data_compra,parcelas').limit(10000),
     ])
-    const err = [casal, membros, contas, cartoes, categorias, lancamentos, metas, movimentos].find((r) => r.error)
+    const err = [casal, membros, contas, cartoes, categorias, lancamentos, metas, movimentos, compras].find((r) => r.error)
     if (err) return setEstado({ carregando: false, erro: err.error.message })
     setEstado({
       carregando: false,
@@ -38,6 +39,7 @@ export function DataProvider({ session, children }) {
       lancamentos: lancamentos.data,
       metas: metas.data,
       movimentos: movimentos.data,
+      comprasPorId: Object.fromEntries(compras.data.map((c) => [c.id, c])),
     })
   }, [uid])
 

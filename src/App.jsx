@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Lancamentos from './pages/Lancamentos'
+import Diario from './pages/Diario'
 import Cartoes from './pages/Cartoes'
 import Contas from './pages/Contas'
 import Metas from './pages/Metas'
@@ -33,7 +34,8 @@ export default function App() {
 
 const ABAS = [
   { id: 'inicio', nome: 'Início', icone: '◧' },
-  { id: 'lancamentos', nome: 'Lançamentos', icone: '☰' },
+  { id: 'lancamentos', nome: 'Lançamentos', curto: 'Lançam.', icone: '☰' },
+  { id: 'diario', nome: 'Despesa diária', curto: 'Diário', icone: '▦' },
   { id: 'cartoes', nome: 'Cartões', icone: '▭' },
   { id: 'contas', nome: 'Contas', icone: '◎' },
   { id: 'metas', nome: 'Reservas e metas', curto: 'Metas', icone: '◆' },
@@ -57,7 +59,7 @@ function Shell() {
     )
   if (app.semCasal) return <Onboarding />
 
-  const Pagina = { inicio: Dashboard, lancamentos: Lancamentos, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
+  const Pagina = { inicio: Dashboard, lancamentos: Lancamentos, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
 
   return (
     <div className="shell">

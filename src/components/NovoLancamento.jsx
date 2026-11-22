@@ -12,13 +12,13 @@ function maisMeses(iso, n) {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
 }
 
-export default function NovoLancamento({ tipoInicial = 'despesa', editar, fechar }) {
+export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, editar, fechar }) {
   const app = useApp()
   const ed = editar || null
   const [tipo, setTipo] = useState(ed?.tipo || tipoInicial)
   const [descricao, setDescricao] = useState(ed?.descricao || '')
   const [valor, setValor] = useState(ed ? String(ed.valor).replace('.', ',') : '')
-  const [data, setData] = useState(ed?.data || hojeISO())
+  const [data, setData] = useState(ed?.data || dataInicial || hojeISO())
   const [categoria, setCategoria] = useState(ed?.categoria_id || '')
   const [resp, setResp] = useState(ed?.user_id || (app.visao !== 'casal' ? app.visao : app.uid))
   const [forma, setForma] = useState(ed?.cartao_id ? 'cartao' : 'conta')
