@@ -959,9 +959,10 @@ function formBloquinho(b) {
       { k: 'data_retirada', l: 'Data da retirada', t: 'date' },
       { k: 'data_devolucao', l: 'Data de devolução', t: 'date', dica: 'Prevista ou realizada' },
       { k: 'situacao', l: 'Situação', t: 'select', op: Object.entries(ST_BLOQ) },
+      { k: 'valor_total', l: 'Valor do bloquinho (R$)', t: 'money' },
       { k: 'observacoes', l: 'Observações', t: 'textarea', full: true },
     ],
-    extra: `<p class="dica">Quantidade de números: <b>${b.quantidade_numeros}</b> · Valor total do bloquinho: <b>${brl(b.valor_total)}</b></p>`,
+    extra: `<p class="dica">Números: <b>${faixaBloq(b)}</b> (${b.quantidade_numeros}) · Acertado: <b>${brl(acertoBloq(b).total)}</b> (PIX ${brl(acertoBloq(b).pix)} · dinheiro ${brl(acertoBloq(b).din)})${pode('pagamentos') && b.responsavel_nome ? ` · <button type="button" class="link" onclick="document.querySelector('.modal-fundo').remove();acertarBloquinho('${b.id}')">editar acerto</button>` : ''}</p>`,
     valores: b,
     aoAbrir: (f) => {
       const sel = f.querySelector('#f_pessoa_id');
@@ -975,6 +976,7 @@ function formBloquinho(b) {
     salvar: (d) => {
       if (d.pessoa_id && !d.responsavel_nome) d.responsavel_nome = S.pessoaPorId[d.pessoa_id]?.nome;
       if (d.situacao !== 'disponivel' && !d.responsavel_nome) throw new Error('Informe quem retirou o bloquinho.');
+      if (!(d.valor_total > 0)) delete d.valor_total;
       return gravar('natal_bloquinhos', b.id, d);
     },
     excluir: PAPEL === 'admin' ? async () => {
@@ -1045,7 +1047,7 @@ function listaBloquinhos() {
       <td class="num"><b>${brl(a.total)}</b>${a.ag ? `<br><small class="dica">+${brl(a.ag)} aguardando</small>` : ''}<div class="barra" style="margin-top:4px;min-width:70px"><i style="width:${pct}%"></i></div></td>
       <td class="num">${!b.responsavel_nome ? '—' : a.falta > 0 ? `<b style="color:var(--vermelho)">${brl(a.falta)}</b>` : '<span class="badge b-verde">acertado</span>'}</td>
       <td><span class="badge ${ST_BLOQ_COR[b.situacao]}">${ST_BLOQ[b.situacao]}</span>${atrasado ? '<br><span class="badge b-verm">devolução vencida</span>' : ''}</td>
-      <td class="acoes">${pode('pagamentos') && b.responsavel_nome && a.falta > 0 ? `<button class="btn peq ouro" onclick="event.stopPropagation();acertarBloquinho('${b.id}')">💰 Acertar</button> ` : ''}<button class="btn peq" onclick="event.stopPropagation();irPara('rifas',{bloq:'${b.id}',st:'',q:''})">Números</button></td></tr>`;
+      <td class="acoes">${pode('pagamentos') && b.responsavel_nome ? `<button class="btn peq ${a.total > 0 ? '' : 'ouro'}" onclick="event.stopPropagation();acertarBloquinho('${b.id}')">${a.total > 0 ? '✏️ Editar acerto' : '💰 Acertar'}</button> ` : ''}<button class="btn peq" onclick="event.stopPropagation();irPara('rifas',{bloq:'${b.id}',st:'',q:''})">Números</button></td></tr>`;
   }).join('');
   $('#bloq-lista').innerHTML = `
     <div class="kpis" style="margin-bottom:12px">
@@ -1061,34 +1063,48 @@ function listaBloquinhos() {
     <tfoot><tr><td colspan="3">${lista.length} bloquinho(s)</td><td class="num">${brl(tot.valor)}</td><td class="num">${brl(tot.pix)}</td><td class="num">${brl(tot.din)}</td><td class="num">${brl(tot.total)}</td><td class="num">${brl(Math.max(0, tot.valor - tot.total))}</td><td colspan="2"></td></tr></tfoot></table></div>`;
 }
 
-// Acerto rápido do bloquinho: informa PIX e dinheiro e o sistema marca os números como vendidos e pagos
+// Acerto do bloquinho (criar ou EDITAR): informa o total em PIX e em dinheiro e o sistema ajusta os números
+const ehAcerto = (p) => p.pagador === 'Acerto do bloquinho';
 function acertarBloquinho(id) {
   const b = S.bloqPorId[id];
-  const a = acertoBloq(b);
-  const livres = (S.numsPorBloq[b.id] || []).filter((n) => n.status === 'disponivel');
   const vn = Number(S.config.valor_numero);
+  const pagsBl = S.pagamentos.filter((p) => p.bloquinho_id === b.id);
+  const pagsAc = pagsBl.filter(ehAcerto);
+  const atualPix = soma(pagsAc.filter((p) => p.forma === 'pix'), 'valor');
+  const atualDin = soma(pagsAc.filter((p) => p.forma === 'dinheiro'), 'valor');
+  const outros = soma(pagsBl.filter((p) => !ehAcerto(p)), 'valor');
+  const numsAc = (S.numsPorBloq[b.id] || []).filter((n) => n.comprador_nome === 'Acerto do bloquinho');
+  const livresDepois = (S.numsPorBloq[b.id] || []).filter((n) => n.status === 'disponivel').length + numsAc.length;
+  const entregasAc = S.entregas.filter((e) => (e.observacoes || '').includes(`Acerto do bloquinho ${pad3(b.numero)}`));
+  const editando = pagsAc.length > 0;
   abrirForm({
-    titulo: `💰 Acerto · Bloquinho ${pad3(b.numero)} (${faixaBloq(b)})`,
+    titulo: `${editando ? '✏️ Editar acerto' : '💰 Acerto'} · Bloquinho ${pad3(b.numero)} (${faixaBloq(b)})`,
     campos: [
-      { k: 'pix', l: 'Valor em PIX (R$)', t: 'money' },
-      { k: 'din', l: 'Valor em dinheiro (R$)', t: 'money' },
+      { k: 'pix', l: 'Total acertado em PIX (R$)', t: 'money' },
+      { k: 'din', l: 'Total acertado em dinheiro (R$)', t: 'money' },
       { k: 'data', l: 'Data do acerto', t: 'date', req: true },
       { k: 'entregue', l: 'Dinheiro já entregue ao caixa?', t: 'select', op: [['sim', 'Sim, já entregou'], ['nao', 'Não, ainda está com o responsável']] },
       { k: 'obs', l: 'Observações', full: true },
     ],
-    valores: { pix: '', din: '', data: hoje(), entregue: 'sim' },
+    valores: { pix: atualPix || '', din: atualDin || '', data: pagsAc[0]?.data || hoje(), entregue: entregasAc.length || !editando ? 'sim' : 'nao', obs: '' },
     extra: `<div class="relatorio-bloco" style="margin-top:6px">
         <div class="lin"><span>Responsável</span><b>${esc(b.responsavel_nome || '—')}</b></div>
         <div class="lin"><span>Valor do bloquinho</span><b>${brl(b.valor_total)}</b></div>
-        <div class="lin"><span>Já acertado</span><b>${brl(a.total)} (PIX ${brl(a.pix)} · dinheiro ${brl(a.din)})</b></div>
-        <div class="lin total"><span>Falta</span><b style="color:var(--vermelho)">${brl(a.falta)}</b></div></div>
-      <p class="dica" style="margin-top:8px">O sistema marca ${brl(vn)} por número: os números livres do bloquinho viram <b>vendidos e pagos</b> (${livres.length} livre(s)). Para registrar o nome de cada comprador, use a tela de Rifas.</p>`,
+        ${outros ? `<div class="lin"><span>Vendas registradas número a número (fora do acerto)</span><b>${brl(outros)}</b></div>` : ''}
+        <div class="lin"><span>Acerto atual</span><b>PIX ${brl(atualPix)} · dinheiro ${brl(atualDin)}</b></div></div>
+      <p class="dica" style="margin-top:8px">Informe o <b>total</b> do acerto (não só a diferença). Para zerar o acerto, deixe os dois campos vazios. Cada ${brl(vn)} corresponde a 1 número do bloquinho.</p>`,
     salvar: async (d) => {
       const pix = Number(d.pix) || 0, din = Number(d.din) || 0;
-      if (pix + din <= 0) throw new Error('Informe o valor em PIX e/ou em dinheiro.');
       if (Math.abs(pix / vn - Math.round(pix / vn)) > 0.001 || Math.abs(din / vn - Math.round(din / vn)) > 0.001) throw new Error(`Os valores precisam ser múltiplos de ${brl(vn)} (valor de cada número).`);
       const nPix = Math.round(pix / vn), nDin = Math.round(din / vn);
-      if (nPix + nDin > livres.length) throw new Error(`O bloquinho só tem ${livres.length} número(s) livre(s) (${brl(livres.length * vn)}).`);
+      if (nPix + nDin > livresDepois) throw new Error(`O bloquinho só comporta mais ${livresDepois} número(s) no acerto (${brl(livresDepois * vn)}).`);
+      // 1. desfaz o acerto anterior (pagamentos, números e entrega do acerto)
+      if (pagsAc.length) { const { error } = await sb.from('natal_pagamentos').delete().in('id', pagsAc.map((p) => p.id)); if (error) throw error; }
+      if (numsAc.length) { const { error } = await sb.from('natal_numeros').update({ status: 'disponivel', comprador_nome: null, comprador_telefone: null, vendedor: null, data_venda: null, forma_pagamento: null, observacoes: null }).in('id', numsAc.map((n) => n.id)); if (error) throw error; }
+      if (entregasAc.length) { const { error } = await sb.from('natal_entregas').delete().in('id', entregasAc.map((e) => e.id)); if (error) throw error; }
+      // 2. aplica o novo acerto
+      const { data: livres, error: e0 } = await sb.from('natal_numeros').select('id,numero').eq('bloquinho_id', b.id).eq('status', 'disponivel').order('numero');
+      if (e0) throw e0;
       for (const [forma, ns] of [['pix', livres.slice(0, nPix)], ['dinheiro', livres.slice(nPix, nPix + nDin)]]) {
         if (!ns.length) continue;
         const { error: e1 } = await sb.from('natal_numeros').update({ status: 'vendido', comprador_nome: 'Acerto do bloquinho', vendedor: b.responsavel_nome, data_venda: d.data, forma_pagamento: forma, observacoes: d.obs || 'Vendido no acerto do bloquinho' }).in('id', ns.map((n) => n.id));
@@ -1100,13 +1116,34 @@ function acertarBloquinho(id) {
         const { error } = await sb.from('natal_entregas').insert({ pessoa_id: b.pessoa_id, valor: din, data: d.data, forma: 'dinheiro', observacoes: `Acerto do bloquinho ${pad3(b.numero)}` });
         if (error) throw error;
       }
-      const novoTotal = a.total + pix + din;
-      if (novoTotal >= Number(b.valor_total)) await sb.from('natal_bloquinhos').update({ situacao: 'finalizado' }).eq('id', b.id);
-      else if (b.situacao === 'entregue') await sb.from('natal_bloquinhos').update({ situacao: 'em_andamento' }).eq('id', b.id);
+      const total = pix + din + outros;
+      const sit = total >= Number(b.valor_total) ? 'finalizado' : total > 0 ? 'em_andamento' : (b.responsavel_nome ? 'entregue' : 'disponivel');
+      if (sit !== b.situacao && !['devolvido'].includes(b.situacao)) await sb.from('natal_bloquinhos').update({ situacao: sit }).eq('id', b.id);
     },
   });
 }
 window.acertarBloquinho = acertarBloquinho;
+function formPagamento(id) {
+  const p = S.pagamentos.find((x) => x.id === id);
+  const n = S.numPorId[p.numero_id];
+  abrirForm({
+    titulo: `Editar pagamento${n ? ' · nº ' + String(n.numero).padStart(2, '0') : ''}`,
+    campos: [
+      { k: 'pagador', l: 'Quem pagou' },
+      { k: 'valor', l: 'Valor (R$)', t: 'money', req: true },
+      { k: 'forma', l: 'Forma', t: 'select', op: FORMAS_REC },
+      { k: 'data', l: 'Data', t: 'date', req: true },
+      { k: 'recebido_por', l: 'Recebido por', t: 'datalist', lista: nomesPessoas() },
+      { k: 'situacao', l: 'Situação', t: 'select', op: [['confirmado', 'Confirmado'], ['aguardando', 'Aguardando conferência']] },
+      { k: 'comprovante_path', l: 'Comprovante', t: 'file', pasta: 'pagamentos', full: true },
+      { k: 'observacoes', l: 'Observações', full: true },
+    ],
+    valores: p,
+    salvar: (d) => { if (!(d.valor > 0)) throw new Error('Informe o valor.'); return gravar('natal_pagamentos', p.id, d); },
+    excluir: () => apagar('natal_pagamentos', p.id),
+  });
+}
+window.formPagamento = formPagamento;
 
 // ============================================================
 // 7. RECEBIMENTOS (pagamentos, entregas, outras receitas)
@@ -1169,7 +1206,7 @@ function listaAbaRec() {
       return `<tr><td>${dataBR(p.data)}</td><td>${esc(p.pagador)}</td><td>${n ? `<button class="link" onclick="abrirNumero('${n.id}')">${String(n.numero).padStart(2, '0')}</button>` : '—'}</td><td>${b ? pad3(b.numero) : '—'}</td>
         <td class="num"><b>${brl(p.valor)}</b></td><td>${p.forma === 'pix' ? 'PIX' : 'Dinheiro'}</td><td>${esc(p.recebido_por)}</td>
         <td>${p.situacao === 'confirmado' ? '<span class="badge b-verde">Confirmado</span>' : '<span class="badge b-ouro">Aguardando conferência</span>'}</td>
-        <td class="acoes">${linkArq(p.comprovante_path)} ${p.situacao === 'aguardando' && podeConfirmar() ? `<button class="btn peq prim" onclick="confirmarPag('${p.id}')">Confirmar</button>` : ''}</td></tr>`;
+        <td class="acoes">${linkArq(p.comprovante_path)} ${p.situacao === 'aguardando' && podeConfirmar() ? `<button class="btn peq prim" onclick="confirmarPag('${p.id}')">Confirmar</button>` : ''} ${podeConfirmar() ? `<button class="btn peq" onclick="formPagamento('${p.id}')">Editar</button>` : ''}</td></tr>`;
     }).join('')}</tbody><tfoot><tr><td colspan="4">${lista.length} pagamento(s)</td><td class="num">${brl(soma(lista, 'valor'))}</td><td colspan="4"></td></tr></tfoot></table></div>` : '<div class="card vazio">Nenhum pagamento encontrado.</div>';
   } else if (f.aba === 'entregas') {
     const lista = [...S.entregas].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
