@@ -213,7 +213,7 @@ async function todos(tabela, ordem) {
 }
 
 async function carregar() {
-  const [grupo, config, pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas] = await Promise.all([
+  const [grupo, config, pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato] = await Promise.all([
     sb.from('natal_grupos').select('*').maybeSingle().then((r) => { if (r.error) throw r.error; return r.data; }),
     sb.from('natal_config').select('*').maybeSingle().then((r) => { if (r.error) throw r.error; return r.data; }),
     todos('natal_pessoas', 'nome'),
@@ -225,9 +225,12 @@ async function carregar() {
     todos('natal_pagamentos', 'data'),
     todos('natal_entregas', 'data'),
     todos('natal_receitas', 'data'),
+    todos('natal_agenda', 'criado_em').catch(() => []),
+    todos('natal_escala', 'criado_em').catch(() => []),
+    todos('natal_pix_extrato', 'criado_em').catch(() => []),
   ]);
   S = { carregado: true, grupo: grupo || {}, config: config || { nome_evento: 'Carretinha de Natal', ano: new Date().getFullYear(), numeros_por_bloquinho: 20, valor_numero: 6.25, estoque_minimo_padrao: 10 },
-    pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, semConfig: !config };
+    pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato, semConfig: !config };
   S.bloqPorId = Object.fromEntries(bloquinhos.map((b) => [b.id, b]));
   S.numPorId = Object.fromEntries(numeros.map((n) => [n.id, n]));
   S.pessoaPorId = Object.fromEntries(pessoas.map((p) => [p.id, p]));
@@ -322,6 +325,8 @@ function alertas() {
   if (despPend.length) a.push({ ic: '🧾', grave: false, t: `${despPend.length} despesa(s) pendente(s)`, d: `${brl(soma(despPend, 'valor_total'))} a pagar`, ir: 'despesas', f: { sit: 'pendente' } });
   const naoConf = S.pagamentos.filter((p) => p.situacao === 'aguardando');
   if (naoConf.length) a.push({ ic: '🔎', grave: false, t: `${naoConf.length} comprovante(s) não conferido(s)`, d: `${brl(soma(naoConf, 'valor'))} aguardando conferência`, ir: 'recebimentos', f: { sit: 'aguardando' } });
+  const extPend = (S.extrato || []).filter((x) => x.situacao === 'pendente');
+  if (extPend.length) a.push({ ic: '🏦', grave: false, t: `${extPend.length} PIX do extrato sem vínculo com números`, d: `${brl(soma(extPend, 'valor'))} na conta para conferir/vincular`, ir: 'recebimentos', f: { aba: 'extrato' } });
   const premPend = S.premios.filter((p) => p.situacao === 'pendente');
   if (premPend.length) a.push({ ic: '🎁', grave: false, t: `${premPend.length} prêmio(s) ainda não adquirido(s)`, d: premPend.slice(0, 3).map((p) => p.nome).join(', '), ir: 'premios' });
   const baixo = S.produtos.filter((p) => Number(p.quantidade_restante) <= estoqueMin(p));
@@ -457,6 +462,7 @@ const SECOES = [
   { id: 'bloquinhos', n: '📒', l: 'Controle de Bloquinhos', visivel: () => true, render: rBloquinhos },
   { id: 'recebimentos', n: '💰', l: 'Controle de Recebimentos', visivel: () => true, render: rRecebimentos },
   { id: 'pessoas', n: '👥', l: 'Pessoas e Responsáveis', visivel: () => true, render: rPessoas },
+  { id: 'programacao', n: '🗓️', l: 'Programação e Escala', visivel: () => true, render: rProgramacao },
   { id: 'relatorios', n: '📑', l: 'Relatórios e Prestação de Contas', visivel: () => true, render: rRelatorios },
   { id: 'config', n: '⚙️', l: 'Configurações', visivel: () => PAPEL === 'admin', render: rConfig },
 ];
@@ -508,6 +514,7 @@ function rDashboard() {
       <div class="kpi"><span>Números vendidos</span><b>${vend.length} <small>de ${nums.length}</small></b><small>${nums.length ? Math.round((vend.length / nums.length) * 100) : 0}% vendidos</small></div>
       <div class="kpi"><span>Números pagos</span><b>${nums.filter((n) => n.status === 'pago').length}</b><small>&nbsp;</small></div>
       <div class="kpi v"><span>Números pendentes</span><b>${nums.filter((n) => ['vendido', 'pendente'].includes(n.status)).length}</b><small>vendidos sem pagamento total</small></div>
+      ${(S.extrato || []).length ? `<div class="kpi a" style="cursor:pointer" onclick="irPara('recebimentos',{aba:'extrato'})"><span>PIX na conta (extrato)</span><b>${brl(soma(S.extrato.filter((x) => x.situacao !== 'ignorado'), 'valor'))}</b><small>${S.extrato.filter((x) => x.situacao === 'pendente').length} sem vínculo · ${brl(soma(S.extrato.filter((x) => x.situacao === 'pendente'), 'valor'))}</small></div>` : ''}
     </div>
     <div class="grade3">
       <div class="card"><h3>💰 Arrecadação × despesas (acumulado)</h3><div class="chart-box"><canvas id="ch1"></canvas></div></div>
@@ -610,7 +617,7 @@ function formDespesa(d) {
   });
 }
 function rDespesas(completo) {
-  const f = (F.despesas ||= { cat: '', sit: '', forma: '', q: '' });
+  const f = (F.despesas = { cat: '', sit: '', forma: '', q: '', ...(F.despesas || {}) });
   if (completo) {
     $('#conteudo').innerHTML = `
       <div class="entre"><div class="filtros">
@@ -706,7 +713,7 @@ function usarProduto(id) {
 }
 window.usarProduto = usarProduto;
 function rProdutos(completo) {
-  const f = (F.produtos ||= { cat: '', q: '', baixo: false });
+  const f = (F.produtos = { cat: '', q: '', baixo: false, ...(F.produtos || {}) });
   if (completo) {
     $('#conteudo').innerHTML = `
       <div class="entre"><div class="filtros">
@@ -795,7 +802,7 @@ function rPremios() {
 // 5. RIFAS — números individuais
 // ============================================================
 function rRifas(completo) {
-  const f = (F.rifas ||= { bloq: '', st: '', q: '' });
+  const f = (F.rifas = { bloq: '', st: '', q: '', ...(F.rifas || {}) });
   if (completo) {
     $('#conteudo').innerHTML = `
       <div class="kpis" id="rifa-kpis"></div>
@@ -994,7 +1001,7 @@ function gerarBloquinhos() {
 }
 window.gerarBloquinhos = gerarBloquinhos;
 function rBloquinhos(completo) {
-  const f = (F.bloquinhos ||= { sit: '', q: '' });
+  const f = (F.bloquinhos = { sit: '', q: '', ...(F.bloquinhos || {}) });
   if (completo) {
     $('#conteudo').innerHTML = `
       <div class="entre"><div class="filtros">
@@ -1032,13 +1039,14 @@ function listaBloquinhos() {
 // 7. RECEBIMENTOS (pagamentos, entregas, outras receitas)
 // ============================================================
 function rRecebimentos(completo) {
-  const f = (F.recebimentos ||= { aba: 'pagamentos', forma: '', sit: '', resp: '', bloq: '', q: '' });
+  const f = (F.recebimentos = { aba: 'pagamentos', forma: '', sit: '', resp: '', bloq: '', q: '', ...(F.recebimentos || {}) });
   if (completo) {
     $('#conteudo').innerHTML = `
       <div class="abas" id="rec-abas">
         <button data-aba="pagamentos">🎟️ Pagamentos da rifa</button>
         <button data-aba="entregas">💵 Entregas dos responsáveis</button>
         <button data-aba="receitas">🤝 Doações e outras entradas</button>
+        <button data-aba="extrato">🏦 Extrato PIX</button>
       </div><div id="rec-conteudo"></div>`;
     document.querySelectorAll('#rec-abas button').forEach((bt) => { bt.onclick = () => { f.aba = bt.dataset.aba; montarAbaRec(); }; });
     montarAbaRec();
@@ -1061,6 +1069,8 @@ function montarAbaRec() {
       <p class="dica" style="margin-top:8px">Para registrar um novo pagamento, abra o número em <button class="link" onclick="irPara('rifas')">Controle de Rifas</button> (permite pagamentos parciais). Números pendentes: ${S.numeros.filter((n) => ['vendido', 'pendente'].includes(n.status)).length}.</p>`;
     $('#frc-q').oninput = (e) => { f.q = e.target.value; listaAbaRec(); };
     ['forma', 'sit', 'resp', 'bloq'].forEach((k) => { $('#frc-' + k).onchange = (e) => { f[k] = e.target.value; listaAbaRec(); }; });
+  } else if (f.aba === 'extrato') {
+    box.innerHTML = montarExtrato(); listaExtrato(); return;
   } else if (f.aba === 'entregas') {
     box.innerHTML = `<div class="entre" style="margin:12px 0"><p class="dica">Valores em dinheiro que os responsáveis entregaram ao caixa da Carretinha.</p>${pode('entregas') ? '<button class="btn prim" onclick="formEntrega()">+ Registrar entrega</button>' : ''}</div><div id="rec-lista"></div>`;
   } else {
@@ -1070,6 +1080,7 @@ function montarAbaRec() {
 }
 function listaAbaRec() {
   const f = F.recebimentos;
+  if (f.aba === 'extrato') return listaExtrato();
   if (f.aba === 'pagamentos') {
     const q = f.q.trim().toLowerCase();
     const lista = S.pagamentos.filter((p) => (!f.forma || p.forma === f.forma) && (!f.sit || p.situacao === f.sit) && (!f.resp || p.recebido_por === f.resp) && (!f.bloq || p.bloquinho_id === f.bloq)
@@ -1206,7 +1217,7 @@ window.prestacaoPessoa = prestacaoPessoa;
 // 9. RELATÓRIOS E PRESTAÇÃO DE CONTAS
 // ============================================================
 function rRelatorios(completo) {
-  const f = (F.relatorios ||= { de: '', ate: '', aba: 'contas' });
+  const f = (F.relatorios = { de: '', ate: '', aba: 'contas', ...(F.relatorios || {}) });
   if (completo) {
     $('#conteudo').innerHTML = `
       <div class="card"><div class="entre"><div class="filtros">
@@ -1391,6 +1402,11 @@ async function rConfig() {
         </div><div class="erro-box oculto" id="div-erro"></div>
         <button class="btn prim" style="align-self:flex-start">Salvar divulgação</button></form></div>
     </div>
+    <div class="card"><h3>📥 Importar planilha da Carretinha (Excel)</h3>
+      <p class="dica">Envie a planilha <b>CARRETINHA DE NATAL.xlsx</b> (abas CARRETINHA, PESSOAL, BALAS, SORTEIO RIFA, CONTA PIX e ACERTO). O sistema preenche tudo automaticamente. Pode importar de novo depois de atualizar a planilha: <b>só entra o que é novo</b>, nada é duplicado nem apagado.</p>
+      <div class="filtros" style="margin-top:10px"><input type="file" id="imp-arquivo" accept=".xlsx,.xls"><button class="btn ouro" id="imp-analisar">Analisar planilha</button></div>
+      <div id="imp-resultado"></div>
+    </div>
     <div class="card"><h3>👥 Equipe com acesso ao sistema</h3>
       <ul class="dica" style="margin:0 0 12px;padding-left:18px">
         <li><b>Administrador geral</b> — tudo, inclusive configurações, convites e link público.</li>
@@ -1407,6 +1423,7 @@ async function rConfig() {
       <p class="dica" style="margin-top:6px">A pessoa cria a conta (ou entra) em <b>${esc(location.origin)}/carretinha.html</b> com esse mesmo e-mail e já cai na Carretinha com o papel escolhido.</p>
       <div id="convites-lista"></div>
     </div>`;
+  $('#imp-analisar').onclick = analisarPlanilha;
   const fc = $('#form-config');
   const atBloq = () => { $('#cfg-bloq').innerHTML = `Valor de cada bloquinho: <b>${brl(num(fc.elements.numeros_por_bloquinho.value) * num(fc.elements.valor_numero.value))}</b>. Alterações valem para os próximos bloquinhos gerados.`; };
   fc.elements.numeros_por_bloquinho.oninput = atBloq; fc.elements.valor_numero.oninput = atBloq; atBloq();
@@ -1475,6 +1492,400 @@ function primeirosPassos() {
   if (feitos === passos.length) return '';
   return `<div class="card"><div class="entre"><h3 style="margin:0">🚀 Primeiros passos · ${feitos} de ${passos.length}</h3><div class="barra" style="width:160px"><i style="width:${(feitos / passos.length) * 100}%"></i></div></div>
     <div class="passos" style="margin-top:12px">${passos.map((p, i) => `<div class="passo${p.ok ? ' ok' : ''}"><span class="ck">${p.ok ? '✓' : i + 1}</span><div><b>${p.t}</b><small>${p.d}</small></div>${p.ok ? '' : `<button class="btn peq prim" onclick="irPara('${p.ir}')">${p.b}</button>`}</div>`).join('')}</div></div>`;
+}
+
+// ============================================================
+// EXTRATO PIX (conferência dos PIX recebidos na conta)
+// ============================================================
+const ST_EXT = { pendente: 'Sem vínculo', vinculado: 'Vinculado aos números', ignorado: 'Já incluído no acerto' };
+const ST_EXT_COR = { pendente: 'b-ouro', vinculado: 'b-verde', ignorado: 'b-cinza' };
+F.extrato = { sit: '', vend: '', q: '' };
+function montarExtrato() {
+  const ex = S.extrato || [];
+  const vend = [...new Set(ex.map((x) => normNome(x.vendedor || '')).filter(Boolean))].sort();
+  const porVend = {};
+  for (const x of ex) { const k = normNome(x.vendedor || '') || '(sem vendedor)'; porVend[k] ||= { v: 0, n: 0, q: 0 }; porVend[k].v += Number(x.valor); porVend[k].n++; porVend[k].q += Number(x.qtd_numeros) || 0; }
+  const f = F.extrato;
+  return `<div class="kpis" style="margin-top:12px">
+      <div class="kpi a"><span>Total no extrato</span><b>${brl(soma(ex.filter((x) => x.situacao !== 'ignorado'), 'valor'))}</b><small>${ex.length} PIX</small></div>
+      <div class="kpi o"><span>Sem vínculo</span><b>${brl(soma(ex.filter((x) => x.situacao === 'pendente'), 'valor'))}</b><small>${ex.filter((x) => x.situacao === 'pendente').length} PIX para vincular</small></div>
+      <div class="kpi"><span>Vinculados a números</span><b>${brl(soma(ex.filter((x) => x.situacao === 'vinculado'), 'valor'))}</b></div>
+      <div class="kpi"><span>Já incluídos no acerto</span><b>${brl(soma(ex.filter((x) => x.situacao === 'ignorado'), 'valor'))}</b></div></div>
+    <p class="dica" style="margin:10px 0">O extrato é a lista de PIX que caíram na conta. Para não contar duas vezes, ele <b>não entra no saldo</b> até ser <b>vinculado aos números</b> (o sistema marca os números como vendidos e registra o pagamento) ou marcado como <b>já incluído no acerto</b> de um bloquinho.</p>
+    <div class="card" style="margin-bottom:12px"><h3>Por vendedor</h3><div class="cat-cards">${Object.entries(porVend).sort((a, b) => b[1].v - a[1].v).map(([k, v]) => `<div><small>${esc(k)}</small><b>${brl(v.v)}</b><small>${v.n} PIX · ${v.q} números</small></div>`).join('')}</div></div>
+    <div class="entre"><div class="filtros">
+      <input type="search" id="fe-q" placeholder="Buscar nome…" value="${esc(f.q)}">
+      <select id="fe-sit"><option value="">Todas as situações</option>${Object.entries(ST_EXT).map(([k, v]) => `<option value="${k}"${f.sit === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
+      <select id="fe-vend"><option value="">Todos os vendedores</option><option value="-"${f.vend === '-' ? ' selected' : ''}>(sem vendedor)</option>${vend.map((v) => `<option${f.vend === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>
+    </div>${pode('extrato') ? '<button class="btn prim" onclick="formExtrato()">+ Lançar PIX</button>' : ''}</div>
+    <div id="ext-lista" style="margin-top:10px"></div>`;
+}
+function listaExtrato() {
+  const f = F.extrato, q = (f.q || '').toLowerCase();
+  const qi = $('#fe-q'); if (qi && !qi.oninput) { qi.oninput = (e) => { f.q = e.target.value; listaExtrato(); }; $('#fe-sit').onchange = (e) => { f.sit = e.target.value; listaExtrato(); }; $('#fe-vend').onchange = (e) => { f.vend = e.target.value; listaExtrato(); }; }
+  const lista = (S.extrato || []).filter((x) => (!f.sit || x.situacao === f.sit) && (!f.vend || (f.vend === '-' ? !x.vendedor : normNome(x.vendedor || '') === f.vend)) && (!q || x.nome.toLowerCase().includes(q)))
+    .sort((a, b) => (a.data || '').localeCompare(b.data || '') || a.criado_em.localeCompare(b.criado_em));
+  const box = $('#ext-lista'); if (!box) return;
+  box.innerHTML = lista.length ? `<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Nome</th><th class="num">Valor</th><th class="num">Números</th><th>Vendedor</th><th>Situação</th><th></th></tr></thead><tbody>${lista.map((x) => `<tr>
+    <td>${x.data ? dataBR(x.data) : '<span class="badge b-verm">sem data</span>'}</td><td><b>${esc(x.nome)}</b>${x.observacoes ? `<br><small class="dica">${esc(x.observacoes)}</small>` : ''}</td>
+    <td class="num">${brl(x.valor)}</td><td class="num">${x.qtd_numeros ?? '—'}${x.numeros_vinculados ? `<br><small class="dica">nº ${esc(x.numeros_vinculados)}</small>` : ''}</td><td>${esc(x.vendedor || '')}</td>
+    <td><span class="badge ${ST_EXT_COR[x.situacao]}">${ST_EXT[x.situacao]}</span></td>
+    <td class="acoes">${pode('extrato') ? `${x.situacao === 'pendente' ? `<button class="btn peq prim" onclick="vincularExtrato('${x.id}')">Vincular</button> <button class="btn peq" onclick="marcarExtrato('${x.id}','ignorado')" title="O valor já está no acerto de algum bloquinho">Já no acerto</button>` : x.situacao === 'ignorado' ? `<button class="btn peq" onclick="marcarExtrato('${x.id}','pendente')">Desfazer</button>` : ''} <button class="btn peq" onclick="formExtrato(S.extrato.find(e=>e.id==='${x.id}'))">Editar</button>` : ''}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="2">${lista.length} PIX</td><td class="num">${brl(soma(lista, 'valor'))}</td><td class="num">${soma(lista, (x) => x.qtd_numeros || 0)}</td><td colspan="3"></td></tr></tfoot></table></div>` : '<div class="card vazio">Nenhum PIX no extrato. Importe a planilha em Configurações ou lance manualmente.</div>';
+}
+function formExtrato(x) {
+  abrirForm({
+    titulo: x ? 'Editar PIX do extrato' : 'Lançar PIX recebido',
+    campos: [
+      { k: 'data', l: 'Data', t: 'date' },
+      { k: 'nome', l: 'Nome de quem pagou', req: true },
+      { k: 'valor', l: 'Valor (R$)', t: 'money', req: true },
+      { k: 'qtd_numeros', l: 'Quantidade de números', t: 'number' },
+      { k: 'vendedor', l: 'Quem vendeu', t: 'datalist', lista: nomesPessoas() },
+      { k: 'situacao', l: 'Situação', t: 'select', op: Object.entries(ST_EXT) },
+      { k: 'observacoes', l: 'Observações', full: true },
+    ],
+    valores: x || { data: hoje(), situacao: 'pendente' },
+    salvar: (d) => { if (!(d.valor > 0)) throw new Error('Informe o valor.'); d.qtd_numeros = d.qtd_numeros ? Math.round(d.qtd_numeros) : null; return gravar('natal_pix_extrato', x?.id, d); },
+    excluir: x && pode('extrato') ? () => apagar('natal_pix_extrato', x.id) : null,
+  });
+}
+window.formExtrato = formExtrato;
+window.marcarExtrato = async (id, sit) => { try { await gravar('natal_pix_extrato', id, { situacao: sit }); await recarregar(false); toast('Atualizado'); } catch (e) { toast(msgErro(e), true); } };
+function vincularExtrato(id) {
+  const x = S.extrato.find((e) => e.id === id);
+  const vn = chave(x.vendedor || '');
+  const pessoa = S.pessoas.find((p) => chave(p.nome) === vn);
+  const livres = (b) => (S.numsPorBloq[b.id] || []).filter((n) => n.status === 'disponivel').length;
+  const blocos = S.bloquinhos.filter((b) => livres(b) > 0);
+  const sugerido = pessoa ? blocos.find((b) => b.pessoa_id === pessoa.id) : null;
+  const qtdPadrao = x.qtd_numeros || Math.max(1, Math.round(x.valor / S.config.valor_numero));
+  abrirForm({
+    titulo: `Vincular PIX · ${x.nome}`,
+    campos: [
+      { k: 'bloq', l: 'Bloquinho', t: 'select', req: true, full: true, op: [['', '— escolha —'], ...blocos.map((b) => [b.id, `Bloquinho ${pad3(b.numero)} – ${b.responsavel_nome || 'sem responsável'} (${livres(b)} livres)`])] },
+      { k: 'qtd', l: 'Quantidade de números', t: 'number', req: true },
+      { k: 'especificos', l: 'Números específicos (opcional)', dica: 'Ex.: 101, 102, 115. Vazio = os primeiros livres do bloquinho.' },
+    ],
+    valores: { bloq: sugerido?.id || '', qtd: qtdPadrao },
+    extra: `<p class="dica">PIX de <b>${brl(x.valor)}</b> em ${x.data ? dataBR(x.data) : 'data não informada'}${x.vendedor ? ` · vendido por <b>${esc(x.vendedor)}</b>` : ''}. Os números ficam no nome de <b>${esc(x.nome)}</b>, com o pagamento via PIX já confirmado.</p>`,
+    salvar: async (d) => {
+      const b = S.bloqPorId[d.bloq];
+      if (!b) throw new Error('Escolha o bloquinho.');
+      let nums;
+      if (d.especificos) {
+        const lista = String(d.especificos).split(/[^0-9]+/).filter(Boolean).map(Number);
+        nums = lista.map((k) => S.numeros.find((n) => n.numero === k));
+        if (nums.some((n) => !n)) throw new Error('Algum número informado não existe.');
+        if (nums.some((n) => n.status !== 'disponivel')) throw new Error('Algum número informado já está vendido.');
+      } else {
+        const q = Math.round(Number(d.qtd) || 0);
+        if (q < 1) throw new Error('Informe a quantidade.');
+        nums = (S.numsPorBloq[b.id] || []).filter((n) => n.status === 'disponivel').slice(0, q);
+        if (nums.length < q) throw new Error(`O bloquinho só tem ${nums.length} número(s) livre(s).`);
+      }
+      const ids = nums.map((n) => n.id);
+      const valorCada = Math.round((Number(x.valor) / nums.length) * 100) / 100;
+      const { error: e1 } = await sb.from('natal_numeros').update({ comprador_nome: x.nome, vendedor: x.vendedor || b.responsavel_nome || null, data_venda: x.data || hoje(), forma_pagamento: 'pix', status: 'vendido' }).in('id', ids);
+      if (e1) throw e1;
+      const pags = nums.map((n, i) => ({ numero_id: n.id, valor: i === nums.length - 1 ? Math.round((Number(x.valor) - valorCada * (nums.length - 1)) * 100) / 100 : valorCada, forma: 'pix', data: x.data || hoje(), pagador: x.nome, recebido_por: 'Conta PIX', situacao: 'confirmado', observacoes: 'Vinculado do extrato PIX' })).filter((p2) => p2.valor > 0);
+      const { error: e2 } = await sb.from('natal_pagamentos').insert(pags);
+      if (e2) throw e2;
+      await gravar('natal_pix_extrato', x.id, { situacao: 'vinculado', numeros_vinculados: nums.map((n) => n.numero).join(', ') });
+    },
+  });
+}
+window.vincularExtrato = vincularExtrato;
+
+// ============================================================
+// PROGRAMAÇÃO (agenda) E ESCALA DA EQUIPE
+// ============================================================
+function rProgramacao() {
+  const ag = [...(S.agenda || [])].sort((a, b) => (a.data || '9999').localeCompare(b.data || '9999') || (a.hora || '').localeCompare(b.hora || ''));
+  const esc_ = S.escala || [];
+  const funcoes = [...new Set(esc_.map((e) => e.funcao))];
+  $('#conteudo').innerHTML = `
+    <div class="card"><div class="entre"><h3 style="margin:0">🗓️ Programação da Carretinha</h3>${pode('agenda') ? '<button class="btn prim" onclick="formAgenda()">+ Nova data</button>' : ''}</div>
+      <p class="dica" style="margin:6px 0 12px">Datas marcadas como públicas aparecem no link de divulgação.</p>
+      ${ag.length ? `<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Hora</th><th>O quê</th><th>Local</th><th>Público</th><th></th></tr></thead><tbody>${ag.map((a) => `<tr>
+        <td>${a.data ? `<b>${dataBR(a.data)}</b>` : '<span class="badge b-ouro">a definir</span>'}</td><td>${esc(a.hora || '')}</td><td>${esc(a.titulo)}${a.observacoes ? `<br><small class="dica">${esc(a.observacoes)}</small>` : ''}</td><td>${esc(a.local || '')}</td>
+        <td>${a.publico ? '<span class="badge b-verde">sim</span>' : '<span class="badge b-cinza">não</span>'}</td>
+        <td class="acoes">${pode('agenda') ? `<button class="btn peq" onclick="formAgenda(S.agenda.find(x=>x.id==='${a.id}'))">Editar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="vazio">Nenhuma data cadastrada.</p>'}
+    </div>
+    <div class="card"><div class="entre"><h3 style="margin:0">🎅 Escala da equipe</h3>${pode('escala') ? '<button class="btn prim" onclick="formEscala()">+ Adicionar à escala</button>' : ''}</div>
+      ${funcoes.length ? `<div class="cat-cards" style="margin-top:12px;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">${funcoes.map((fn) => `<div><b style="color:var(--verde)">${esc(fn)}</b>
+        <ul style="margin:6px 0 0;padding-left:16px">${esc_.filter((e) => e.funcao === fn).sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999)).map((e) => `<li style="margin:2px 0">${pode('escala') ? `<button class="link" style="font-weight:500;color:var(--txt)" onclick="formEscala(S.escala.find(x=>x.id==='${e.id}'))">${esc(e.nome)}</button>` : esc(e.nome)}${e.observacoes ? ` <small class="dica">(${esc(e.observacoes)})</small>` : ''}</li>`).join('')}</ul></div>`).join('')}</div>` : '<p class="vazio">Ninguém na escala ainda.</p>'}
+    </div>`;
+}
+function formAgenda(a) {
+  abrirForm({
+    titulo: a ? 'Editar data' : 'Nova data na programação',
+    campos: [
+      { k: 'titulo', l: 'O quê', req: true, full: true },
+      { k: 'data', l: 'Data', t: 'date' },
+      { k: 'hora', l: 'Hora', dica: 'Ex.: 16h' },
+      { k: 'local', l: 'Local' },
+      { k: 'publico', l: 'Mostrar no link público', t: 'select', op: [['true', 'Sim'], ['false', 'Não']] },
+      { k: 'observacoes', l: 'Observações', t: 'textarea', full: true },
+    ],
+    valores: a ? { ...a, publico: String(a.publico) } : { publico: 'true' },
+    salvar: (d) => { d.publico = d.publico !== 'false'; return gravar('natal_agenda', a?.id, d); },
+    excluir: a && pode('agenda') ? () => apagar('natal_agenda', a.id) : null,
+  });
+}
+window.formAgenda = formAgenda;
+function formEscala(e) {
+  const funcoes = [...new Set((S.escala || []).map((x) => x.funcao))];
+  abrirForm({
+    titulo: e ? 'Editar escala' : 'Adicionar à escala',
+    campos: [
+      { k: 'funcao', l: 'Função', req: true, t: 'datalist', lista: funcoes },
+      { k: 'nome', l: 'Nome (ou veículo)', req: true },
+      { k: 'observacoes', l: 'Observações' },
+    ],
+    valores: e || {},
+    salvar: (d) => gravar('natal_escala', e?.id, d),
+    excluir: e && pode('escala') ? () => apagar('natal_escala', e.id) : null,
+  });
+}
+window.formEscala = formEscala;
+
+// ============================================================
+// IMPORTAÇÃO DA PLANILHA "CARRETINHA DE NATAL.xlsx"
+// ============================================================
+const normNome = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+const chave = (s) => normNome(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+const tituloNome = (s) => normNome(s).toLowerCase().replace(/(^|[\s(/-])(\S)/g, (m, a, b) => a + b.toUpperCase());
+const dataISO = (v) => {
+  if (v instanceof Date && !isNaN(v)) { if (v.getFullYear() < 2020 || v.getFullYear() > 2100) return null; return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`; }
+  return null;
+};
+const numPlan = (v) => (typeof v === 'number' ? v : num(String(v ?? '').replace(/[^0-9,.-]/g, '')));
+let PLANO = null;
+
+async function analisarPlanilha() {
+  const out = $('#imp-resultado');
+  const file = $('#imp-arquivo').files[0];
+  if (!file) return toast('Escolha o arquivo .xlsx da planilha.', true);
+  if (!window.XLSX) return toast('Biblioteca de Excel não carregou.', true);
+  out.innerHTML = '<p class="dica">Lendo a planilha…</p>';
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    PLANO = lerPlanilha(wb);
+    const p = PLANO;
+    out.innerHTML = `<div class="ok-box" style="margin-top:12px">Planilha lida. Veja o que será importado:</div>
+      <div class="cat-cards" style="margin-top:10px">
+        <div><small>Rifa</small><b>${p.blocos.length} bloquinhos</b><small>${p.porBloq} números de ${brl(p.valorNumero)} (${brl(p.porBloq * p.valorNumero)})</small></div>
+        <div><small>Responsáveis</small><b>${new Set(p.blocos.map((b) => chave(b.resp))).size} pessoas</b></div>
+        <div><small>Acertos (já pagos)</small><b>${p.acertos.length} bloquinhos</b><small>${brl(soma(p.acertos, (a) => a.pix + a.din))}</small></div>
+        <div><small>Extrato PIX</small><b>${p.extrato.length} PIX</b><small>${brl(soma(p.extrato, 'valor'))}</small></div>
+        <div><small>Prêmios</small><b>${p.premios.length}</b></div>
+        <div><small>Compras (balas etc.)</small><b>${p.compras.length}</b><small>${brl(soma(p.compras, 'total'))}</small></div>
+        <div><small>Programação</small><b>${p.agenda.length} datas</b><small>sorteio ${p.sorteio ? dataBR(p.sorteio) : '—'}</small></div>
+        <div><small>Escala</small><b>${p.escala.length} nomes</b><small>${new Set(p.escala.map((e) => e.funcao)).size} funções</small></div>
+      </div>
+      ${p.avisos.length ? `<div class="card" style="margin-top:10px;border-color:#efdca0;background:#fffbea"><h3>⚠️ Pontos para conferir na planilha</h3><ul class="dica" style="margin:0;padding-left:18px">${p.avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul></div>` : ''}
+      <p class="dica" style="margin-top:10px">Ao importar: os parâmetros passam a ser <b>${p.porBloq} números de ${brl(p.valorNumero)}</b>; os bloquinhos são criados com a numeração da planilha; os bloquinhos do ACERTO ficam com os números vendidos e pagos (PIX/dinheiro) e o dinheiro é registrado como entregue; os PIX da aba CONTA PIX entram no <b>Extrato PIX</b> para você vincular aos números.</p>
+      <button class="btn verm" id="imp-confirmar" style="margin-top:8px">📥 Importar agora</button><div id="imp-log" class="dica" style="margin-top:10px;white-space:pre-line"></div>`;
+    $('#imp-confirmar').onclick = importarPlano;
+  } catch (e) {
+    console.error(e);
+    out.innerHTML = `<div class="erro-box" style="margin-top:10px">Não consegui ler a planilha: ${esc(e.message)}</div>`;
+  }
+}
+
+function lerPlanilha(wb) {
+  const aba = (nome) => { const k = wb.SheetNames.find((n) => chave(n) === chave(nome)); return k ? XLSX.utils.sheet_to_json(wb.Sheets[k], { header: 1, raw: true, defval: null }) : null; };
+  const avisos = [];
+  // --- SORTEIO RIFA: prêmios (A-D) e bloquinhos (F-I)
+  const sr = aba('SORTEIO RIFA');
+  if (!sr) throw new Error('Aba "SORTEIO RIFA" não encontrada.');
+  const premios = [], blocosRaw = [];
+  sr.forEach((r) => {
+    if (r[0] && String(r[0]).trim()) premios.push({ nome: tituloNome(r[0]), doador: r[1] ? tituloNome(r[1]) : null, valor: typeof r[3] === 'number' ? r[3] : null });
+    if (r[6] && r[7]) blocosRaw.push({ linha: r[5], resp: normNome(r[6]), faixa: String(r[7]), valor: numPlan(r[8]) });
+  });
+  const tamanhos = {};
+  const parse = (txt) => { const m = String(txt).match(/(\d+)\s*-\s*(\d+)/); return m ? [Number(m[1]), Number(m[2])] : null; };
+  blocosRaw.forEach((b) => { const f = parse(b.faixa); if (f && f[1] > f[0] && f[1] - f[0] < 200) { const t = f[1] - f[0] + 1; tamanhos[t] = (tamanhos[t] || 0) + 1; } });
+  const porBloq = Number(Object.entries(tamanhos).sort((a, b) => b[1] - a[1])[0]?.[0] || 25);
+  const valorBloq = Object.entries(blocosRaw.reduce((m, b) => { if (b.valor) m[b.valor] = (m[b.valor] || 0) + 1; return m; }, {})).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const valorNumero = Math.round((Number(valorBloq || 125) / porBloq) * 100) / 100;
+  const blocos = [];
+  const usados = {};
+  for (const b of blocosRaw) {
+    const f = parse(b.faixa);
+    if (!f) { avisos.push(`SORTEIO RIFA: faixa "${b.faixa}" de ${b.resp} não reconhecida — ignorada.`); continue; }
+    let [ini, fim] = f;
+    if (fim - ini + 1 !== porBloq) { avisos.push(`SORTEIO RIFA: faixa "${b.faixa}" (${b.resp}) corrigida para ${String(ini).padStart(4, '0')} - ${String(ini + porBloq - 1).padStart(4, '0')}.`); fim = ini + porBloq - 1; }
+    if ((ini - 1) % porBloq !== 0) { avisos.push(`SORTEIO RIFA: faixa ${ini}-${fim} (${b.resp}) não começa no início de um bloquinho — ignorada.`); continue; }
+    const bloco = (ini - 1) / porBloq + 1;
+    if (usados[bloco]) { avisos.push(`SORTEIO RIFA: a faixa ${ini}-${fim} aparece para ${usados[bloco]} e ${b.resp} — mantido ${usados[bloco]}.`); continue; }
+    usados[bloco] = b.resp;
+    blocos.push({ bloco, ini, fim, resp: b.resp });
+  }
+  const maxBloco = Math.max(0, ...blocos.map((b) => b.bloco));
+  const faltando = []; for (let i = 1; i <= maxBloco; i++) if (!usados[i]) faltando.push(`${String((i - 1) * porBloq + 1).padStart(4, '0')}-${String(i * porBloq).padStart(4, '0')}`);
+  if (faltando.length) avisos.push(`Bloquinhos sem responsável na planilha: ${faltando.join(', ')} (serão criados como disponíveis).`);
+  // --- ACERTO
+  const acertos = [];
+  const ac = aba('ACERTO');
+  (ac || []).forEach((r) => {
+    if (!r[1] || !r[2]) return;
+    const f = parse(r[2]); if (!f) return;
+    const bloco = (f[0] - 1) / porBloq + 1;
+    const pix = numPlan(r[4]) || 0, din = numPlan(r[5]) || 0;
+    const resp = normNome(r[1]);
+    if (usados[bloco] && chave(usados[bloco]) !== chave(resp)) avisos.push(`Bloquinho ${String(f[0]).padStart(4, '0')}-${String(f[0] + porBloq - 1).padStart(4, '0')}: na aba SORTEIO RIFA está "${usados[bloco]}" e na aba ACERTO está "${resp}" — mantido "${usados[bloco]}" (confira).`);
+    if (pix + din > 0) {
+      if ((pix % valorNumero) > 0.001 || (din % valorNumero) > 0.001) avisos.push(`ACERTO de ${resp} (${r[2]}): valores não são múltiplos de ${brl(valorNumero)} — registre esse acerto manualmente.`);
+      else acertos.push({ bloco, resp: usados[bloco] || resp, pix, din });
+    }
+  });
+  // --- CONTA PIX (extrato)
+  const extrato = [];
+  const cp = aba('CONTA PIX');
+  (cp || []).slice(1).forEach((r, i) => {
+    if (!r[1] || typeof r[2] !== 'number') return;
+    const data = dataISO(r[0]);
+    if (!data) avisos.push(`CONTA PIX linha ${i + 2}: data inválida para ${normNome(r[1])} (${r[0]}) — importado sem data.`);
+    const qtd = typeof r[4] === 'number' ? Math.round(r[4]) : null;
+    if (qtd && Math.abs(qtd * valorNumero - r[2]) > 0.01) avisos.push(`CONTA PIX: ${normNome(r[1])} pagou ${brl(r[2])} por ${qtd} número(s) (o certo seria ${brl(qtd * valorNumero)}) — confira.`);
+    extrato.push({ data, nome: tituloNome(r[1]), valor: r[2], vendedor: r[3] ? tituloNome(r[3]) : null, qtd_numeros: qtd });
+  });
+  // --- BALAS (compras e composição do saquinho)
+  const compras = []; let composicao = [];
+  (aba('BALAS') || []).forEach((r) => {
+    if (r[0] && typeof r[1] === 'number') composicao.push(`${r[1]} ${String(r[0]).trim().toLowerCase()}`);
+    if (r[3] && typeof r[6] === 'number' && !/total/i.test(String(r[5] || ''))) {
+      const nomeRaw = String(r[3]).trim().toLowerCase().replace('pirurilo', 'pirulito');
+      const qtd = numPlan(String(r[4] || '').split(' ')[0]) || null;
+      const unid = String(r[4] || '').replace(/^\s*[\d.,]+\s*/, '').trim() || 'un';
+      const unit = numPlan(r[5]) || null;
+      compras.push({ nome: tituloNome(nomeRaw), qtd, unid, unit, total: r[6], categoria: /bala/.test(nomeRaw) ? 'Balas' : /chiclet/.test(nomeRaw) ? 'Chicletes' : /pirul/.test(nomeRaw) ? 'Pirulitos' : 'Outros' });
+      if (qtd && unit && Math.abs(qtd * unit - r[6]) > 0.5) avisos.push(`BALAS: ${tituloNome(nomeRaw)} — ${qtd} × ${brl(unit)} = ${brl(qtd * unit)}, mas o total na planilha é ${brl(r[6])}. Importado o total da planilha.`);
+    }
+  });
+  // --- CARRETINHA (programação)
+  const agenda = []; let sorteio = null;
+  (aba('CARRETINHA') || []).forEach((r) => {
+    if (!r[0] || !/^\s*data/i.test(String(r[0]))) return;
+    const rot = normNome(String(r[0]).replace(/^\s*data\s*/i, ''));
+    const data = dataISO(r[1]);
+    if (/sorteio/i.test(rot)) { sorteio = data; agenda.push({ titulo: 'Sorteio da Rifa Solidária', data, hora: r[2] ? String(r[2]).trim() : null, local: null }); return; }
+    const t = /arrumar/i.test(rot) ? 'Arrumar a Carretinha' : `Carretinha – ${tituloNome(rot)}`;
+    agenda.push({ titulo: t, data, hora: r[2] ? String(r[2]).trim() : null, local: /arrumar/i.test(rot) ? null : tituloNome(rot) });
+  });
+  // --- PESSOAL (escala)
+  const escala = [];
+  const pe = aba('PESSOAL');
+  if (pe && pe.length) {
+    const cab = pe[0];
+    cab.forEach((fn, c) => {
+      if (!fn) return;
+      const funcao = /^carro$/i.test(String(fn).trim()) ? 'Veículos' : tituloNome(fn);
+      pe.slice(1).forEach((r, i) => { if (r[c] && String(r[c]).trim()) escala.push({ funcao, nome: tituloNome(r[c]), ordem: i + 1 }); });
+    });
+  }
+  return { porBloq, valorNumero, sorteio, blocos, acertos, extrato, premios, compras, composicao: composicao.join(', '), agenda, escala, avisos };
+}
+
+async function importarPlano() {
+  const p = PLANO; if (!p) return;
+  const btn = $('#imp-confirmar'), log = $('#imp-log');
+  const L = (t) => { log.textContent += t + '\n'; };
+  btn.disabled = true; btn.textContent = 'Importando…'; log.textContent = '';
+  try {
+    // 0. compatibilidade
+    const difer = S.bloquinhos.find((b) => b.quantidade_numeros !== p.porBloq);
+    if (difer) throw new Error(`Já existem bloquinhos com ${difer.quantidade_numeros} números. A planilha usa ${p.porBloq}. Exclua os bloquinhos atuais (Controle de Bloquinhos) antes de importar.`);
+    // 1. parâmetros
+    const { error: ec } = await sb.from('natal_config').upsert({ grupo_id: GRUPO, nome_evento: S.config.nome_evento || 'Carretinha de Natal', ano: p.sorteio ? Number(p.sorteio.slice(0, 4)) : (S.config.ano || new Date().getFullYear()), numeros_por_bloquinho: p.porBloq, valor_numero: p.valorNumero, estoque_minimo_padrao: S.config.estoque_minimo_padrao ?? 10, data_sorteio: p.sorteio || S.config.data_sorteio || null });
+    if (ec) throw ec; L(`✔ Parâmetros: ${p.porBloq} números de ${brl(p.valorNumero)}${p.sorteio ? ', sorteio ' + dataBR(p.sorteio) : ''}`);
+    await carregar();
+    // 2. pessoas
+    const nomes = new Map();
+    p.blocos.forEach((b) => nomes.set(chave(b.resp), { nome: tituloNome(b.resp), funcao: 'Responsável por bloquinhos' }));
+    p.extrato.forEach((x) => { if (x.vendedor && !nomes.has(chave(x.vendedor))) nomes.set(chave(x.vendedor), { nome: x.vendedor, funcao: 'Vendedor(a)' }); });
+    const existentes = new Set(S.pessoas.map((x) => chave(x.nome)));
+    const novas = [...nomes.entries()].filter(([k]) => !existentes.has(k)).map(([, v]) => ({ ...v, ativo: true, observacoes: 'Importado da planilha' }));
+    if (novas.length) { const { error } = await sb.from('natal_pessoas').insert(novas); if (error) throw error; }
+    L(`✔ Pessoas: ${novas.length} nova(s)`);
+    // 3. bloquinhos
+    const maxB = Math.max(0, ...p.blocos.map((b) => b.bloco), ...p.acertos.map((a) => a.bloco));
+    const maxAtual = Math.max(0, ...S.bloquinhos.map((b) => b.numero));
+    if (maxB > maxAtual) { const { error } = await sb.rpc('natal_gerar_bloquinhos', { p_qtd: maxB - maxAtual }); if (error) throw error; L(`✔ Bloquinhos gerados: ${maxB - maxAtual} (números ${String(maxAtual * p.porBloq + 1).padStart(4, '0')} a ${String(maxB * p.porBloq).padStart(4, '0')})`); }
+    await carregar();
+    const pessoaPorChave = Object.fromEntries(S.pessoas.map((x) => [chave(x.nome), x]));
+    let atrib = 0;
+    for (const b of p.blocos) {
+      const bl = S.bloquinhos.find((x) => x.numero === b.bloco); if (!bl) continue;
+      const pes = pessoaPorChave[chave(b.resp)];
+      const vendidosBl = (S.numsPorBloq[bl.id] || []).some((n) => n.status !== 'disponivel');
+      if (!bl.responsavel_nome || (chave(bl.responsavel_nome) !== chave(b.resp) && !vendidosBl)) {
+        const { error } = await sb.from('natal_bloquinhos').update({ pessoa_id: pes?.id || null, responsavel_nome: tituloNome(b.resp), telefone: pes?.telefone || bl.telefone || null, situacao: bl.situacao === 'disponivel' ? 'entregue' : bl.situacao }).eq('id', bl.id);
+        if (error) throw error; atrib++;
+      }
+    }
+    L(`✔ Responsáveis atribuídos: ${atrib} bloquinho(s)`);
+    await carregar();
+    // 4. acertos
+    let nAc = 0;
+    for (const a of p.acertos) {
+      const bl = S.bloquinhos.find((x) => x.numero === a.bloco); if (!bl) continue;
+      if (S.pagamentos.some((pg) => pg.bloquinho_id === bl.id)) continue; // já tem pagamentos: não mexe
+      const livres = (S.numsPorBloq[bl.id] || []).filter((n) => n.status === 'disponivel');
+      const nPix = Math.round(a.pix / p.valorNumero), nDin = Math.round(a.din / p.valorNumero);
+      if (nPix + nDin > livres.length) { L(`⚠ Acerto do bloquinho ${pad3(bl.numero)} maior que os números livres — pulado`); continue; }
+      const grupos = [['pix', livres.slice(0, nPix)], ['dinheiro', livres.slice(nPix, nPix + nDin)]];
+      for (const [forma, ns] of grupos) {
+        if (!ns.length) continue;
+        const { error: e1 } = await sb.from('natal_numeros').update({ status: 'vendido', comprador_nome: 'Acerto do bloquinho', vendedor: bl.responsavel_nome, data_venda: hoje(), forma_pagamento: forma, observacoes: 'Vendido no acerto (importado da planilha)' }).in('id', ns.map((n) => n.id));
+        if (e1) throw e1;
+        const { error: e2 } = await sb.from('natal_pagamentos').insert(ns.map((n) => ({ numero_id: n.id, valor: p.valorNumero, forma, data: hoje(), pagador: 'Acerto do bloquinho', recebido_por: bl.responsavel_nome, situacao: 'confirmado', observacoes: 'Importado do ACERTO da planilha' })));
+        if (e2) throw e2;
+      }
+      if (nPix + nDin === (S.numsPorBloq[bl.id] || []).length) await sb.from('natal_bloquinhos').update({ situacao: 'finalizado' }).eq('id', bl.id);
+      if (a.din > 0 && bl.pessoa_id) { const { error } = await sb.from('natal_entregas').insert({ pessoa_id: bl.pessoa_id, valor: a.din, data: hoje(), forma: 'dinheiro', recebido_por: null, observacoes: `Acerto do bloquinho ${pad3(bl.numero)} (importado da planilha)` }); if (error) throw error; }
+      nAc++;
+    }
+    L(`✔ Acertos registrados: ${nAc} bloquinho(s)`);
+    // 5. extrato PIX (sem duplicar: compara quantidade de lançamentos iguais)
+    const contar = (arr) => arr.reduce((m, x) => { const k = `${x.data || ''}|${chave(x.nome)}|${Number(x.valor).toFixed(2)}`; m[k] = (m[k] || 0) + 1; return m; }, {});
+    const jaTem = contar(S.extrato || []); const vistos = {};
+    const novosEx = p.extrato.filter((x) => { const k = `${x.data || ''}|${chave(x.nome)}|${Number(x.valor).toFixed(2)}`; vistos[k] = (vistos[k] || 0) + 1; return vistos[k] > (jaTem[k] || 0); }).map((x) => ({ ...x, situacao: 'pendente', observacoes: x.data ? null : 'Data inválida na planilha' }));
+    if (novosEx.length) { const { error } = await sb.from('natal_pix_extrato').insert(novosEx); if (error) throw error; }
+    L(`✔ Extrato PIX: ${novosEx.length} lançamento(s) novo(s)`);
+    // 6. prêmios
+    const premEx = new Set(S.premios.map((x) => chave(x.nome)));
+    const novosPr = p.premios.filter((x) => !premEx.has(chave(x.nome))).map((x, i) => ({ nome: x.nome, doador_ou_comprador: x.doador, valor_estimado: x.valor || 0, origem: x.valor ? 'comprado' : 'doado', situacao: x.valor ? 'comprado' : 'doado', ordem_sorteio: S.premios.length + i + 1, observacoes: 'Importado da planilha — confira se foi doado ou comprado e o valor.' }));
+    if (novosPr.length) { const { error } = await sb.from('natal_premios').insert(novosPr); if (error) throw error; }
+    L(`✔ Prêmios: ${novosPr.length} novo(s)`);
+    // 7. compras → produtos e despesas
+    const prodEx = new Set(S.produtos.map((x) => chave(x.nome)));
+    const despEx = new Set(S.despesas.map((x) => chave(x.descricao)));
+    const novosProd = p.compras.filter((c) => !prodEx.has(chave(c.nome))).map((c) => ({ nome: c.nome, categoria: c.categoria, quantidade_comprada: c.qtd || 0, quantidade_utilizada: 0, unidade: c.unid, valor_total: c.total, observacoes: p.composicao ? `Por saquinho: ${p.composicao}` : null }));
+    const novasDesp = p.compras.filter((c) => !despEx.has(chave(`Compra de ${c.nome}`))).map((c) => ({ descricao: `Compra de ${c.nome}`, categoria: c.categoria, produto: `${c.qtd || ''} ${c.unid}${c.unit ? ` (${brl(c.unit)} cada)` : ''}`.trim(), quantidade: 1, valor_unitario: c.total, data_compra: hoje(), forma_pagamento: 'outro', situacao: 'pendente', observacoes: 'Importado da planilha — confira data, forma de pagamento e marque como pago.' }));
+    if (novosProd.length) { const { error } = await sb.from('natal_produtos').insert(novosProd); if (error) throw error; }
+    if (novasDesp.length) { const { error } = await sb.from('natal_despesas').insert(novasDesp); if (error) throw error; }
+    L(`✔ Compras: ${novosProd.length} produto(s) no estoque e ${novasDesp.length} despesa(s)`);
+    // 8. programação e escala
+    const agEx = new Set((S.agenda || []).map((x) => chave(x.titulo)));
+    const novasAg = p.agenda.filter((a) => !agEx.has(chave(a.titulo))).map((a) => ({ ...a, publico: true }));
+    if (novasAg.length) { const { error } = await sb.from('natal_agenda').insert(novasAg); if (error) throw error; }
+    const escEx = new Set((S.escala || []).map((x) => chave(x.funcao) + '|' + chave(x.nome)));
+    const novasEsc = p.escala.filter((e) => !escEx.has(chave(e.funcao) + '|' + chave(e.nome)));
+    if (novasEsc.length) { const { error } = await sb.from('natal_escala').insert(novasEsc); if (error) throw error; }
+    L(`✔ Programação: ${novasAg.length} data(s) · Escala: ${novasEsc.length} nome(s)`);
+    await recarregar(false);
+    L('\n🎄 Importação concluída!');
+    toast('Planilha importada');
+    btn.textContent = 'Importado ✔';
+  } catch (e) {
+    console.error(e);
+    L('✖ Erro: ' + msgErro(e) + '\nO que já foi importado foi mantido; corrija e importe de novo (não duplica).');
+    btn.disabled = false; btn.textContent = '📥 Tentar de novo';
+  }
 }
 
 iniciar().catch((e) => { console.error(e); $('#sem-acesso-msg').textContent = 'Erro ao iniciar: ' + msgErro(e); mostrarTela('tela-sem-acesso'); });

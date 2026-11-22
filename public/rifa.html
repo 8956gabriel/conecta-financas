@@ -35,6 +35,12 @@ main{max-width:980px;margin:0 auto;padding:18px 14px;display:flex;flex-direction
 .stats small{color:var(--txt2)}
 .barra{height:10px;background:#efe9da;border-radius:99px;overflow:hidden;margin-top:12px}
 .barra i{display:block;height:100%;background:linear-gradient(90deg,var(--verm2),var(--ouro))}
+.agenda{display:flex;flex-direction:column;gap:8px}
+.ag{display:flex;gap:12px;align-items:center;border:1px solid var(--borda);border-radius:12px;padding:10px 12px}
+.ag .dt{min-width:58px;text-align:center;background:var(--verde);color:#fff;border-radius:10px;padding:6px 4px}
+.ag .dt b{display:block;font-size:16px}
+.ag .dt small{color:#cfe8d6;font-size:11px}
+.ag small{display:block;color:var(--txt2)}
 .premios{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
 .premio{border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:#fff}
 .premio .foto{height:140px;background:linear-gradient(135deg,#f5efe0,#efe6cf);display:grid;place-items:center;font-size:44px}
@@ -141,6 +147,7 @@ function render() {
       <div class="stats"><div><b>${disp}</b><small>disponíveis</small></div><div><b>${vend}</b><small>já vendidos</small></div><div><b>${nums.length}</b><small>números no total</small></div></div>
       <div class="barra"><i style="width:${nums.length ? (vend / nums.length) * 100 : 0}%"></i></div>
     </div>
+    ${(D.agenda || []).length ? `<div class="card"><h2>🗓️ Programação da Carretinha</h2><div class="agenda">${D.agenda.map((a) => `<div class="ag"><div class="dt">${a.data ? `<b>${dataBR(a.data).slice(0, 5)}</b><small>${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][new Date(a.data + 'T12:00').getDay()]}</small>` : '<b>—</b><small>a definir</small>'}</div><div><b>${esc(a.titulo)}</b><small>${[a.hora, a.local].filter(Boolean).map(esc).join(' · ')}</small></div></div>`).join('')}</div></div>` : ''}
     ${D.premios.length ? `<div class="card"><h2>🎁 Prêmios</h2><div class="premios">${D.premios.map((p, i) => `<div class="premio"><div class="foto">${p.foto ? `<img src="${esc(urlFoto(p.foto))}" alt="${esc(p.nome)}" loading="lazy">` : '🎁'}</div><div class="c"><span class="ordem">${p.ordem || i + 1}º prêmio</span><b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ''}</div></div>`).join('')}</div></div>` : ''}
     <div class="card"><h2>🎟️ Escolha seus números</h2>
       <div class="filtros">
