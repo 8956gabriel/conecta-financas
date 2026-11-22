@@ -36,7 +36,7 @@ const ABAS = [
   { id: 'lancamentos', nome: 'Lançamentos', icone: '☰' },
   { id: 'cartoes', nome: 'Cartões', icone: '▭' },
   { id: 'contas', nome: 'Contas', icone: '◎' },
-  { id: 'metas', nome: 'Metas', icone: '◆' },
+  { id: 'metas', nome: 'Reservas e metas', curto: 'Metas', icone: '◆' },
   { id: 'ajustes', nome: 'Ajustes', icone: '⚙' },
 ]
 
@@ -92,9 +92,9 @@ function Shell() {
       </main>
 
       <nav className="tabbar">
-        {ABAS.filter((a) => a.id !== 'metas').map((a) => (
+        {ABAS.map((a) => (
           <button key={a.id} className={aba === a.id ? 'ativo' : ''} onClick={() => setAba(a.id)}>
-            <span className="ic">{a.icone}</span><small>{a.nome}</small>
+            <span className="ic">{a.icone}</span><small>{a.curto || a.nome}</small>
           </button>
         ))}
       </nav>

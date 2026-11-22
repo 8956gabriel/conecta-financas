@@ -15,7 +15,7 @@ export function DataProvider({ session, children }) {
     if (error) return setEstado({ carregando: false, erro: error.message })
     if (!membro) return setEstado({ carregando: false, semCasal: true })
 
-    const [casal, membros, contas, cartoes, categorias, lancamentos, metas] = await Promise.all([
+    const [casal, membros, contas, cartoes, categorias, lancamentos, metas, movimentos] = await Promise.all([
       supabase.from('casais').select('*').eq('id', membro.casal_id).single(),
       supabase.from('membros').select('*').order('created_at'),
       supabase.from('contas').select('*').order('created_at'),
@@ -23,8 +23,9 @@ export function DataProvider({ session, children }) {
       supabase.from('categorias').select('*').order('nome'),
       supabase.from('lancamentos').select('*').order('data', { ascending: false }).limit(10000),
       supabase.from('metas').select('*').order('created_at'),
+      supabase.from('metas_movimentos').select('*').order('data', { ascending: false }).order('created_at', { ascending: false }).limit(5000),
     ])
-    const err = [casal, membros, contas, cartoes, categorias, lancamentos, metas].find((r) => r.error)
+    const err = [casal, membros, contas, cartoes, categorias, lancamentos, metas, movimentos].find((r) => r.error)
     if (err) return setEstado({ carregando: false, erro: err.error.message })
     setEstado({
       carregando: false,
@@ -36,6 +37,7 @@ export function DataProvider({ session, children }) {
       categorias: categorias.data,
       lancamentos: lancamentos.data,
       metas: metas.data,
+      movimentos: movimentos.data,
     })
   }, [uid])
 
@@ -82,6 +84,21 @@ export function saldoConta(conta, lancamentos) {
     s += l.tipo === 'receita' ? Number(l.valor) : -Number(l.valor)
   }
   return s
+}
+
+// Média de despesas dos últimos 3 meses completos (base para a reserva de emergência)
+export function mediaDespesasMensal(lancamentos) {
+  const hoje = new Date()
+  const meses = [1, 2, 3].map((i) => {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  })
+  const totais = meses.map((m) => lancamentos.filter((l) => l.tipo === 'despesa' && l.data.startsWith(m)).reduce((s, l) => s + Number(l.valor), 0))
+  const comDados = totais.filter((t) => t > 0)
+  if (comDados.length) return comDados.reduce((a, b) => a + b, 0) / comDados.length
+  // sem histórico: usa o mês atual
+  const atual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+  return lancamentos.filter((l) => l.tipo === 'despesa' && l.data.startsWith(atual)).reduce((s, l) => s + Number(l.valor), 0)
 }
 
 export function usoCartao(cartao, lancamentos) {

@@ -223,3 +223,25 @@ button.badge { cursor: pointer; }
   .modal-fundo { align-items: end; padding: 0; }
   .modal { border-radius: 18px 18px 0 0; max-height: 92vh; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 }
+
+/* Reservas e metas */
+.bloco-meta { display: flex; flex-direction: column; gap: 12px; }
+.bloco-meta h2 { font-size: 17px; }
+.texto-esq { text-align: left; color: var(--txt2); }
+.texto-esq p { margin: 0 0 6px; }
+.clicavel { cursor: pointer; }
+.meta-ic { width: 34px; height: 34px; border-radius: 10px; display: inline-grid; place-items: center; font-size: 18px; margin-right: 4px; }
+.modelos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.modelos button { display: flex; align-items: center; gap: 8px; background: var(--bg2); border: 1px solid var(--borda2); border-radius: 12px; padding: 12px; cursor: pointer; font-weight: 600; text-align: left; }
+.modelos button span { font-size: 20px; }
+.modelos button:hover, .modelos button.on { border-color: var(--pri); background: #6366f11f; }
+.modelos.pequenos { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.modelos.pequenos button { padding: 8px 10px; font-size: 13px; }
+.modelos.pequenos button span { font-size: 16px; }
+.icones { display: flex; flex-wrap: wrap; gap: 6px; }
+.icones button { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--borda2); background: var(--bg2); cursor: pointer; font-size: 18px; }
+.icones button.on { border-color: var(--pri); background: #6366f133; }
+@media (max-width: 760px) {
+  .tabbar small { font-size: 9.5px; }
+  .modelos { grid-template-columns: 1fr 1fr; }
+}

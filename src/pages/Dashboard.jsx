@@ -173,16 +173,16 @@ export default function Dashboard({ irPara }) {
 
         {app.metas.length > 0 && (
           <section className="card">
-            <h3>Metas</h3>
+            <h3>Reservas e metas · {brl(app.metas.reduce((s, m) => s + Number(m.valor_atual), 0))} guardados</h3>
             <ul className="lista">
-              {app.metas.map((m) => {
-                const pct = Math.min(100, (m.valor_atual / m.valor_alvo) * 100)
+              {[...app.metas].sort((a, b) => ({ reserva: 0, economia: 1, meta: 2 }[a.tipo] - { reserva: 0, economia: 1, meta: 2 }[b.tipo])).map((m) => {
+                const pct = m.valor_alvo ? Math.min(100, (m.valor_atual / m.valor_alvo) * 100) : null
                 return (
                   <li key={m.id} onClick={() => irPara('metas')}>
                     <div className="w100">
-                      <div className="entre"><b>{m.nome}</b><span>{Math.round(pct)}%</span></div>
-                      <div className="barra"><i style={{ width: pct + '%', background: m.cor }} /></div>
-                      <small>{brl(m.valor_atual)} de {brl(m.valor_alvo)}</small>
+                      <div className="entre"><b>{m.icone} {m.nome}</b><span>{pct !== null ? Math.round(pct) + '%' : brl(m.valor_atual)}</span></div>
+                      {pct !== null && <div className="barra"><i style={{ width: pct + '%', background: m.cor }} /></div>}
+                      {pct !== null && <small>{brl(m.valor_atual)} de {brl(m.valor_alvo)}</small>}
                     </div>
                   </li>
                 )
