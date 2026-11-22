@@ -89,7 +89,7 @@ let charts = [];
 
 const pode = (area) => {
   if (PAPEL === 'admin') return true;
-  if (PAPEL === 'financeiro') return ['despesas', 'produtos', 'premios', 'bloquinhos', 'numeros', 'pagamentos', 'receitas', 'pessoas', 'entregas'].includes(area);
+  if (PAPEL === 'financeiro') return ['despesas', 'produtos', 'premios', 'bloquinhos', 'numeros', 'pagamentos', 'receitas', 'pessoas', 'entregas', 'agenda', 'escala', 'extrato', 'divulgacao'].includes(area);
   if (PAPEL === 'bloquinhos') return ['bloquinhos', 'numeros', 'pagamentos', 'pessoas'].includes(area);
   return false;
 };
@@ -213,7 +213,7 @@ async function todos(tabela, ordem) {
 }
 
 async function carregar() {
-  const [grupo, config, pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato] = await Promise.all([
+  const [grupo, config, pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato, fotos, avisos] = await Promise.all([
     sb.from('natal_grupos').select('*').maybeSingle().then((r) => { if (r.error) throw r.error; return r.data; }),
     sb.from('natal_config').select('*').maybeSingle().then((r) => { if (r.error) throw r.error; return r.data; }),
     todos('natal_pessoas', 'nome'),
@@ -228,9 +228,11 @@ async function carregar() {
     todos('natal_agenda', 'criado_em').catch(() => []),
     todos('natal_escala', 'criado_em').catch(() => []),
     todos('natal_pix_extrato', 'criado_em').catch(() => []),
+    todos('natal_fotos', 'criado_em').catch(() => []),
+    todos('natal_avisos', 'criado_em').catch(() => []),
   ]);
   S = { carregado: true, grupo: grupo || {}, config: config || { nome_evento: 'Carretinha de Natal', ano: new Date().getFullYear(), numeros_por_bloquinho: 20, valor_numero: 6.25, estoque_minimo_padrao: 10 },
-    pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato, semConfig: !config };
+    pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato, fotos, avisos, semConfig: !config };
   S.bloqPorId = Object.fromEntries(bloquinhos.map((b) => [b.id, b]));
   S.numPorId = Object.fromEntries(numeros.map((n) => [n.id, n]));
   S.pessoaPorId = Object.fromEntries(pessoas.map((p) => [p.id, p]));
@@ -463,6 +465,7 @@ const SECOES = [
   { id: 'recebimentos', n: '💰', l: 'Controle de Recebimentos', visivel: () => true, render: rRecebimentos },
   { id: 'pessoas', n: '👥', l: 'Pessoas e Responsáveis', visivel: () => true, render: rPessoas },
   { id: 'programacao', n: '🗓️', l: 'Programação e Escala', visivel: () => true, render: rProgramacao },
+  { id: 'divulgacao', n: '📣', l: 'Divulgação (página pública)', visivel: () => ['admin', 'financeiro'].includes(PAPEL), render: rDivulgacao },
   { id: 'relatorios', n: '📑', l: 'Relatórios e Prestação de Contas', visivel: () => true, render: rRelatorios },
   { id: 'config', n: '⚙️', l: 'Configurações', visivel: () => PAPEL === 'admin', render: rConfig },
 ];
@@ -1380,7 +1383,7 @@ async function relHistorico() {
   $('#rel-conteudo').innerHTML = '<div class="card vazio">Carregando histórico…</div>';
   const { data, error } = await sb.from('natal_historico').select('*').order('data', { ascending: false }).limit(300);
   if (error) { $('#rel-conteudo').innerHTML = `<div class="erro-box">${esc(msgErro(error))}</div>`; return; }
-  const nomeT = { pessoas: 'Pessoa', despesas: 'Despesa', produtos: 'Produto', premios: 'Prêmio', bloquinhos: 'Bloquinho', numeros: 'Número', pagamentos: 'Pagamento', entregas: 'Entrega', receitas: 'Entrada', config: 'Configuração', membros: 'Membro da equipe', convites: 'Convite', grupos: 'Carretinha' };
+  const nomeT = { pessoas: 'Pessoa', despesas: 'Despesa', produtos: 'Produto', premios: 'Prêmio', bloquinhos: 'Bloquinho', numeros: 'Número', pagamentos: 'Pagamento', entregas: 'Entrega', receitas: 'Entrada', config: 'Configuração', fotos: 'Foto', avisos: 'Aviso', membros: 'Membro da equipe', convites: 'Convite', grupos: 'Carretinha' };
   const resumo = (h) => {
     const d = h.depois || h.antes || {};
     const base = d.descricao || d.nome || d.pagador || (d.numero ? 'Nº ' + d.numero : '') || '';
@@ -1502,17 +1505,7 @@ async function rConfig() {
         <p class="dica" id="cfg-bloq"></p>
         <div class="erro-box oculto" id="cfg-erro"></div>
         <button class="btn prim" style="align-self:flex-start">Salvar parâmetros</button></form></div>
-      <div class="card"><h3>📣 Divulgação</h3>
-        <form class="form" id="form-div"><div class="grade-form">
-          ${campoHTML({ k: 'nome', l: 'Nome da Carretinha', full: true }, g.nome)}
-          ${campoHTML({ k: 'pix_chave', l: 'Chave PIX para pagamento' }, g.pix_chave)}
-          ${campoHTML({ k: 'pix_nome', l: 'Nome do recebedor do PIX' }, g.pix_nome)}
-          ${campoHTML({ k: 'whatsapp', l: 'WhatsApp para pedidos', t: 'tel', dica: 'Com DDD. Ex.: 44 99999-9999' }, g.whatsapp)}
-          ${campoHTML({ k: 'publico_ativo', l: 'Página pública', t: 'select', op: [['true', 'Ativa'], ['false', 'Desativada']] }, String(g.publico_ativo))}
-          ${campoHTML({ k: 'mostrar_iniciais', l: 'Nos números vendidos, mostrar', t: 'select', op: [['false', 'Só “vendido”'], ['true', 'Inicial do comprador (ex.: M.)']] }, String(g.mostrar_iniciais))}
-          ${campoHTML({ k: 'mensagem_publica', l: 'Mensagem na página pública', t: 'textarea', full: true }, g.mensagem_publica)}
-        </div><div class="erro-box oculto" id="div-erro"></div>
-        <button class="btn prim" style="align-self:flex-start">Salvar divulgação</button></form></div>
+      <div class="card"><h3>📣 Divulgação</h3><p class="dica">Logo, Instagram, PIX, WhatsApp, fotos e avisos da página pública agora ficam na seção <button class="link" onclick="irPara('divulgacao')">📣 Divulgação</button>.</p></div>
     </div>
     <div class="card"><h3>📥 Importar planilha da Carretinha (Excel)</h3>
       <p class="dica">Envie a planilha <b>CARRETINHA DE NATAL.xlsx</b> (abas CARRETINHA, PESSOAL, BALAS, SORTEIO RIFA, CONTA PIX e ACERTO). O sistema preenche tudo automaticamente. Pode importar de novo depois de atualizar a planilha: <b>só entra o que é novo</b>, nada é duplicado nem apagado.</p>
@@ -1547,17 +1540,6 @@ async function rConfig() {
     const { error } = await sb.from('natal_config').upsert({ grupo_id: GRUPO, ...d });
     if (error) { $('#cfg-erro').textContent = msgErro(error); $('#cfg-erro').classList.remove('oculto'); return; }
     await recarregar(false); toast('Parâmetros salvos');
-  };
-  const fd = $('#form-div');
-  fd.onsubmit = async (e) => {
-    e.preventDefault();
-    const tel = fd.elements.whatsapp.value.replace(/\D/g, '');
-    const d = { nome: fd.elements.nome.value.trim() || 'Carretinha de Natal', pix_chave: fd.elements.pix_chave.value.trim() || null, pix_nome: fd.elements.pix_nome.value.trim() || null,
-      whatsapp: tel ? (tel.length <= 11 ? '55' + tel : tel) : null, publico_ativo: fd.elements.publico_ativo.value === 'true',
-      mostrar_iniciais: fd.elements.mostrar_iniciais.value === 'true', mensagem_publica: fd.elements.mensagem_publica.value.trim() || null };
-    const { error } = await sb.from('natal_grupos').update(d).eq('id', GRUPO);
-    if (error) { $('#div-erro').textContent = msgErro(error); $('#div-erro').classList.remove('oculto'); return; }
-    await recarregar(false); toast('Divulgação salva');
   };
   const [{ data: membros, error: e1 }, { data: convites, error: e2 }] = await Promise.all([
     sb.from('natal_membros').select('*').order('criado_em'),
@@ -1605,6 +1587,111 @@ function primeirosPassos() {
   return `<div class="card"><div class="entre"><h3 style="margin:0">🚀 Primeiros passos · ${feitos} de ${passos.length}</h3><div class="barra" style="width:160px"><i style="width:${(feitos / passos.length) * 100}%"></i></div></div>
     <div class="passos" style="margin-top:12px">${passos.map((p, i) => `<div class="passo${p.ok ? ' ok' : ''}"><span class="ck">${p.ok ? '✓' : i + 1}</span><div><b>${p.t}</b><small>${p.d}</small></div>${p.ok ? '' : `<button class="btn peq prim" onclick="irPara('${p.ir}')">${p.b}</button>`}</div>`).join('')}</div></div>`;
 }
+
+
+// ============================================================
+// DIVULGAÇÃO: identidade da página pública, avisos e fotos
+// ============================================================
+function rDivulgacao() {
+  const g = S.grupo;
+  const avisos = [...(S.avisos || [])].sort((a, b) => (b.fixado - a.fixado) || (b.data || '').localeCompare(a.data || ''));
+  const fotos = [...(S.fotos || [])].sort((a, b) => (a.ordem ?? 9999) - (b.ordem ?? 9999) || b.criado_em.localeCompare(a.criado_em));
+  $('#conteudo').innerHTML = `
+    <div class="card"><h3>🔗 Link público</h3>${caixaLinkPublico()}</div>
+    <div class="grade2">
+      <div class="card"><h3>🎄 Identidade da página</h3>
+        <form class="form" id="form-div">
+          <div style="display:flex;gap:14px;align-items:center">
+            <div style="width:84px;height:84px;border-radius:50%;background:#b3141f;display:grid;place-items:center;overflow:hidden;flex:none;border:3px solid var(--dourado2)">${g.logo_path ? `<img src="${esc(urlPublica(g.logo_path))}" style="width:100%;height:100%;object-fit:cover" alt="">` : '<span style="font-size:38px">🎄</span>'}</div>
+            <label style="flex:1">Logo da Carretinha (imagem)<input type="file" name="logo" accept="image/*">${g.logo_path ? '<span class="dica"><label style="display:inline;font-weight:500"><input type="checkbox" name="logo_remover" style="width:auto"> remover logo</label></span>' : ''}</label>
+          </div>
+          <div class="grade-form">
+            ${campoHTML({ k: 'nome', l: 'Nome que aparece na página', full: true }, g.nome)}
+            ${campoHTML({ k: 'instagram', l: 'Instagram', dica: 'Ex.: @carretinhadenatal' }, g.instagram)}
+            ${campoHTML({ k: 'whatsapp', l: 'WhatsApp para pedidos', t: 'tel', dica: 'Com DDD. Ex.: 44 99999-9999' }, g.whatsapp)}
+            ${campoHTML({ k: 'pix_chave', l: 'Chave PIX' }, g.pix_chave)}
+            ${campoHTML({ k: 'pix_nome', l: 'Nome do recebedor do PIX' }, g.pix_nome)}
+            ${campoHTML({ k: 'publico_ativo', l: 'Página pública', t: 'select', op: [['true', 'Ativa'], ['false', 'Desativada']] }, String(g.publico_ativo))}
+            ${campoHTML({ k: 'mostrar_iniciais', l: 'Nos números vendidos, mostrar', t: 'select', op: [['false', 'Só “vendido”'], ['true', 'Inicial do comprador (ex.: M.)']] }, String(g.mostrar_iniciais))}
+            ${campoHTML({ k: 'mensagem_publica', l: 'Mensagem de boas-vindas', t: 'textarea', full: true }, g.mensagem_publica)}
+          </div><div class="erro-box oculto" id="div-erro"></div>
+          <button class="btn prim" style="align-self:flex-start" id="div-salvar">Salvar</button></form></div>
+      <div class="card"><div class="entre"><h3 style="margin:0">📢 Avisos</h3>${pode('divulgacao') ? '<button class="btn prim" onclick="formAviso()">+ Novo aviso</button>' : ''}</div>
+        <p class="dica" style="margin:6px 0 10px">Aparecem na aba “Avisos” da página pública. Fixados ficam no topo.</p>
+        ${avisos.length ? `<div class="passos">${avisos.map((v) => `<div class="passo" style="cursor:pointer" onclick="formAviso(S.avisos.find(x=>x.id==='${v.id}'))">
+          ${v.foto_path ? `<img src="${esc(urlPublica(v.foto_path))}" style="width:48px;height:48px;border-radius:10px;object-fit:cover" alt="">` : '<span class="ck">📢</span>'}
+          <div><b style="text-decoration:none;color:var(--txt)">${v.fixado ? '📌 ' : ''}${esc(v.titulo)}</b><small>${dataBR(v.data)}${v.publico ? '' : ' · oculto'}${v.texto ? ' · ' + esc(v.texto.slice(0, 80)) : ''}</small></div></div>`).join('')}</div>` : '<p class="vazio">Nenhum aviso.</p>'}
+      </div>
+    </div>
+    <div class="card"><div class="entre"><h3 style="margin:0">📸 Fotos (${fotos.length})</h3>${pode('divulgacao') ? `<label class="btn prim" style="cursor:pointer">+ Enviar fotos<input type="file" id="fotos-up" accept="image/*" multiple style="display:none"></label>` : ''}</div>
+      <p class="dica" style="margin:6px 0 10px">Você pode escolher várias fotos de uma vez. Clique numa foto para pôr legenda, ocultar ou excluir.</p>
+      <div id="fotos-prog" class="dica"></div>
+      ${fotos.length ? `<div class="galeria">${fotos.map((f) => `<div class="gal-item" onclick="formFoto('${f.id}')"><img src="${esc(urlPublica(f.foto_path))}" alt="" loading="lazy">${f.legenda ? `<span>${esc(f.legenda)}</span>` : ''}${f.publico ? '' : '<em>oculta</em>'}</div>`).join('')}</div>` : '<p class="vazio">Nenhuma foto ainda.</p>'}
+    </div>`;
+  const fd = $('#form-div');
+  fd.onsubmit = async (e) => {
+    e.preventDefault();
+    const err = $('#div-erro'); err.classList.add('oculto');
+    const bt = $('#div-salvar'); bt.disabled = true; bt.textContent = 'Salvando…';
+    try {
+      const tel = fd.elements.whatsapp.value.replace(/\D/g, '');
+      const insta = fd.elements.instagram.value.trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/[/?].*$/, '').replace(/^@/, '');
+      const d = { nome: fd.elements.nome.value.trim() || 'Carretinha de Natal', instagram: insta || null, pix_chave: fd.elements.pix_chave.value.trim() || null, pix_nome: fd.elements.pix_nome.value.trim() || null,
+        whatsapp: tel ? (tel.length <= 11 ? '55' + tel : tel) : null, publico_ativo: fd.elements.publico_ativo.value === 'true',
+        mostrar_iniciais: fd.elements.mostrar_iniciais.value === 'true', mensagem_publica: fd.elements.mensagem_publica.value.trim() || null };
+      const file = fd.elements.logo.files[0];
+      if (file) d.logo_path = await enviarArquivo(file, 'logo', true);
+      else if (fd.elements.logo_remover?.checked) d.logo_path = null;
+      const { error } = await sb.from('natal_grupos').update(d).eq('id', GRUPO);
+      if (error) throw error;
+      await recarregar(false); toast('Página pública atualizada');
+    } catch (e2) { err.textContent = msgErro(e2); err.classList.remove('oculto'); bt.disabled = false; bt.textContent = 'Salvar'; }
+  };
+  const up = $('#fotos-up');
+  if (up) up.onchange = async () => {
+    const files = [...up.files]; if (!files.length) return;
+    const prog = $('#fotos-prog'); let ok = 0;
+    for (const f of files) {
+      prog.textContent = `Enviando ${ok + 1} de ${files.length}…`;
+      try { const path = await enviarArquivo(f, 'fotos', true); const { error } = await sb.from('natal_fotos').insert({ foto_path: path }); if (error) throw error; ok++; }
+      catch (e) { toast(`${f.name}: ${msgErro(e)}`, true); }
+    }
+    prog.textContent = ''; await recarregar(false); toast(`${ok} foto(s) enviada(s)`);
+  };
+}
+function formAviso(v) {
+  abrirForm({
+    titulo: v ? 'Editar aviso' : 'Novo aviso',
+    campos: [
+      { k: 'titulo', l: 'Título', req: true, full: true },
+      { k: 'texto', l: 'Texto do aviso', t: 'textarea', full: true },
+      { k: 'data', l: 'Data', t: 'date', req: true },
+      { k: 'fixado', l: 'Fixar no topo', t: 'select', op: [['false', 'Não'], ['true', 'Sim']] },
+      { k: 'publico', l: 'Mostrar na página pública', t: 'select', op: [['true', 'Sim'], ['false', 'Não (rascunho)']] },
+      { k: 'foto_path', l: 'Imagem (opcional)', t: 'file', accept: 'image/*', pasta: 'avisos', publico: true, full: true },
+    ],
+    valores: v ? { ...v, fixado: String(v.fixado), publico: String(v.publico) } : { data: hoje(), fixado: 'false', publico: 'true' },
+    salvar: (d) => { d.fixado = d.fixado === 'true'; d.publico = d.publico !== 'false'; return gravar('natal_avisos', v?.id, d); },
+    excluir: v && pode('divulgacao') ? () => apagar('natal_avisos', v.id) : null,
+  });
+}
+window.formAviso = formAviso;
+function formFoto(id) {
+  const f = S.fotos.find((x) => x.id === id);
+  abrirForm({
+    titulo: 'Foto',
+    campos: [
+      { k: 'legenda', l: 'Legenda', full: true },
+      { k: 'ordem', l: 'Ordem (menor aparece primeiro)', t: 'number' },
+      { k: 'publico', l: 'Mostrar na página pública', t: 'select', op: [['true', 'Sim'], ['false', 'Não']] },
+    ],
+    extra: `<img src="${esc(urlPublica(f.foto_path))}" style="width:100%;max-height:320px;object-fit:contain;border-radius:12px;margin-top:10px;background:#f5efe0" alt="">`,
+    valores: { ...f, publico: String(f.publico) },
+    salvar: (d) => { d.publico = d.publico !== 'false'; d.ordem = d.ordem ? Math.round(d.ordem) : null; return gravar('natal_fotos', f.id, d); },
+    excluir: pode('divulgacao') ? () => apagar('natal_fotos', f.id) : null,
+  });
+}
+window.formFoto = formFoto;
 
 // ============================================================
 // EXTRATO PIX (conferência dos PIX recebidos na conta)

@@ -3,103 +3,142 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f3d24">
-<title>🎄 Rifa Solidária — Carretinha de Natal</title>
-<meta name="description" content="Escolha seu número da Rifa Solidária da Carretinha de Natal.">
-<meta property="og:title" content="🎄 Rifa Solidária — Carretinha de Natal">
-<meta property="og:description" content="Escolha seu número e ajude a Carretinha de Natal!">
+<meta name="theme-color" content="#8f0f1a">
+<title>🎄 Carretinha de Natal — Rifa Solidária</title>
+<meta name="description" content="Rifa Solidária, avisos e fotos da Carretinha de Natal.">
+<meta property="og:title" content="🎄 Carretinha de Natal — Rifa Solidária">
+<meta property="og:description" content="Escolha seu número, veja os avisos e as fotos da Carretinha de Natal!">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎄</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Mountains+of+Christmas:wght@700&family=Playfair+Display:wght@700;800&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--verde:#0f3d24;--verde2:#166534;--verde-claro:#e7f3ea;--verm:#b91c1c;--verm2:#dc2626;--ouro:#c9a227;--ouro2:#e6c45c;--creme:#fbf8f1;--borda:#e6e0d2;--txt:#1c2a22;--txt2:#55635a}
+:root{--verm:#b3141f;--verm2:#8f0f1a;--verm3:#d62839;--verm-claro:#fdeced;--ouro:#d4a537;--ouro2:#f2cf6b;--verde:#14532d;--verde2:#1f7a45;--creme:#fff8ef;--borda:#f0d9c9;--txt:#2a1215;--txt2:#6b4a4d}
 *{box-sizing:border-box}
-body{margin:0;font:15px/1.45 Inter,system-ui,sans-serif;color:var(--txt);background:var(--creme);-webkit-font-smoothing:antialiased;padding-bottom:110px}
-.hero{background:radial-gradient(700px 300px at 10% 0%,rgba(201,162,39,.3),transparent 60%),radial-gradient(600px 300px at 100% 100%,rgba(185,28,28,.35),transparent 60%),linear-gradient(160deg,#0b2e1b,#0f3d24 55%,#13502f);color:#fff;padding:34px 18px 40px;text-align:center;position:relative;overflow:hidden}
-.hero::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;background:repeating-linear-gradient(90deg,var(--verm2) 0 18px,#fff 18px 26px,var(--ouro2) 26px 44px,#fff 44px 52px)}
-.hero .arv{font-size:54px}
-.hero h1{font-family:'Playfair Display',serif;font-size:32px;margin:6px 0 4px}
-.hero p{margin:4px auto;color:#d7ecdd;max-width:560px}
-.hero .preco{display:inline-block;margin-top:12px;background:linear-gradient(135deg,var(--ouro2),var(--ouro));color:#3b2c00;font-weight:800;padding:8px 18px;border-radius:999px;font-size:17px}
-.flocos{position:absolute;inset:0;pointer-events:none}
-.flocos i{position:absolute;top:-20px;color:#fff;opacity:.55;animation:cai linear infinite}
-@keyframes cai{to{transform:translateY(420px) rotate(360deg)}}
-main{max-width:980px;margin:0 auto;padding:18px 14px;display:flex;flex-direction:column;gap:18px}
-.card{background:#fff;border:1px solid var(--borda);border-radius:16px;padding:18px;box-shadow:0 6px 24px rgba(15,61,36,.07)}
-.card h2{margin:0 0 12px;font-size:18px;color:var(--verde);font-family:'Playfair Display',serif}
+html{scroll-behavior:smooth}
+body{margin:0;font:15px/1.5 Inter,system-ui,sans-serif;color:var(--txt);-webkit-font-smoothing:antialiased;padding-bottom:110px;
+  background:radial-gradient(1000px 500px at 50% -200px,#e23744 0%,transparent 70%),linear-gradient(180deg,#8f0f1a 0,#b3141f 340px,#7a0c16 340px,#7a0c16 100%)}
+.oculto{display:none!important}
+.hero{position:relative;color:#fff;text-align:center;padding:26px 16px 20px;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.04) 0 14px,transparent 14px 28px);pointer-events:none}
+.luzes{position:absolute;left:0;right:0;top:0;height:22px;display:flex;justify-content:space-around;pointer-events:none}
+.luzes i{width:10px;height:14px;border-radius:50%;margin-top:8px;box-shadow:0 0 10px currentColor;animation:pisca 1.6s infinite}
+.luzes i:nth-child(4n+1){color:#f2cf6b;background:#f2cf6b}.luzes i:nth-child(4n+2){color:#3ddc84;background:#3ddc84;animation-delay:.4s}.luzes i:nth-child(4n+3){color:#fff;background:#fff;animation-delay:.8s}.luzes i:nth-child(4n){color:#6cc3ff;background:#6cc3ff;animation-delay:1.2s}
+@keyframes pisca{50%{opacity:.35}}
+.logo{width:116px;height:116px;border-radius:50%;margin:16px auto 10px;background:#fff;display:grid;place-items:center;overflow:hidden;border:4px solid var(--ouro2);box-shadow:0 10px 30px rgba(0,0,0,.35),0 0 0 8px rgba(255,255,255,.12);position:relative;z-index:1}
+.logo img{width:100%;height:100%;object-fit:cover}
+.logo span{font-size:58px}
+.hero h1{font-family:'Mountains of Christmas','Playfair Display',serif;font-size:40px;line-height:1.05;margin:4px 0 2px;text-shadow:0 3px 0 rgba(0,0,0,.25);position:relative;z-index:1}
+.hero .sub{color:#ffd9dc;margin:0;position:relative;z-index:1;font-weight:500}
+.chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px;position:relative;z-index:1}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;font-weight:700;font-size:13.5px;text-decoration:none;color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3)}
+.chip.ouro{background:linear-gradient(135deg,var(--ouro2),var(--ouro));color:#3b2700;border:none}
+.chip.insta{background:linear-gradient(45deg,#f09433,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888);border:none}
+.chip svg{width:16px;height:16px}
+.flocos{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+.flocos i{position:absolute;top:-20px;color:#fff;opacity:.5;animation:cai linear infinite;font-style:normal}
+@keyframes cai{to{transform:translateY(110vh) rotate(360deg)}}
+.abas{position:sticky;top:0;z-index:5;display:flex;justify-content:center;gap:6px;padding:10px;background:rgba(122,12,22,.94);backdrop-filter:blur(8px);border-bottom:3px solid var(--ouro2)}
+.abas button{border:none;background:transparent;color:#ffd9dc;font:inherit;font-weight:700;padding:9px 16px;border-radius:999px;cursor:pointer;font-size:14.5px}
+.abas button.on{background:#fff;color:var(--verm)}
+.abas .badge{background:var(--ouro2);color:#3b2700;border-radius:999px;font-size:11px;padding:1px 6px;margin-left:4px}
+main{position:relative;z-index:1;max-width:980px;margin:0 auto;padding:16px 12px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--creme);border-radius:18px;padding:18px;box-shadow:0 10px 30px rgba(0,0,0,.18);position:relative}
+.card h2{margin:0 0 12px;font-size:20px;color:var(--verm);font-family:'Playfair Display',serif;display:flex;align-items:center;gap:8px}
+.card.faixa{border-top:6px solid var(--ouro2)}
+.vazio{text-align:center;color:var(--txt2);padding:30px 16px}
+.dica{color:var(--txt2);font-size:13.5px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.stats div{background:var(--creme);border:1px solid var(--borda);border-radius:12px;padding:10px;text-align:center}
-.stats b{display:block;font-size:22px;color:var(--verde)}
+.stats div{background:#fff;border:1px solid var(--borda);border-radius:14px;padding:10px;text-align:center}
+.stats b{display:block;font-size:24px;color:var(--verm)}
 .stats small{color:var(--txt2)}
-.barra{height:10px;background:#efe9da;border-radius:99px;overflow:hidden;margin-top:12px}
-.barra i{display:block;height:100%;background:linear-gradient(90deg,var(--verm2),var(--ouro))}
-.agenda{display:flex;flex-direction:column;gap:8px}
-.ag{display:flex;gap:12px;align-items:center;border:1px solid var(--borda);border-radius:12px;padding:10px 12px}
-.ag .dt{min-width:58px;text-align:center;background:var(--verde);color:#fff;border-radius:10px;padding:6px 4px}
-.ag .dt b{display:block;font-size:16px}
-.ag .dt small{color:#cfe8d6;font-size:11px}
-.ag small{display:block;color:var(--txt2)}
-.premios{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-.premio{border:1px solid var(--borda);border-radius:14px;overflow:hidden;background:#fff}
-.premio .foto{height:140px;background:linear-gradient(135deg,#f5efe0,#efe6cf);display:grid;place-items:center;font-size:44px}
+.barra{height:12px;background:#f3dcd2;border-radius:99px;overflow:hidden;margin-top:12px}
+.barra i{display:block;height:100%;background:repeating-linear-gradient(45deg,var(--verm3) 0 10px,#fff 10px 14px)}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.filtros button{border:1px solid var(--borda);background:#fff;border-radius:999px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer;font-size:13.5px}
+.filtros button.on{background:var(--verm);color:#fff;border-color:var(--verm)}
+.filtros input{flex:1;min-width:140px;border:1px solid var(--borda);border-radius:999px;padding:8px 14px;font:inherit;background:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:7px}
+.n{border-radius:12px;padding:8px 2px;text-align:center;font-weight:800;font-size:16px;border:2px solid transparent;user-select:none;font-variant-numeric:tabular-nums}
+.n small{display:block;font-size:9.5px;font-weight:600;opacity:.85}
+.n.d{background:#fff;color:var(--verde);border-color:#cfe6d6;cursor:pointer}
+.n.d:hover{border-color:var(--verde2)}
+.n.d.sel{background:var(--verde2);color:#fff;border-color:var(--ouro2);box-shadow:0 0 0 2px var(--ouro2)}
+.n.v{background:var(--verm-claro);color:#b46b71;border-color:#f3c6ca;cursor:not-allowed}
+.n.r{background:#fff4e5;color:#a86a12;border-color:#f6cf98;cursor:not-allowed}
+.legenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--txt2);margin-top:12px}
+.legenda i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:4px;vertical-align:-2px}
+.premios{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.premio{border-radius:14px;overflow:hidden;background:#fff;border:1px solid var(--borda)}
+.premio .foto{height:130px;background:linear-gradient(135deg,#fde6e8,#fff4e0);display:grid;place-items:center;font-size:42px}
 .premio .foto img{width:100%;height:100%;object-fit:cover}
 .premio .c{padding:10px 12px}
 .premio .c b{display:block}
 .premio .c small{color:var(--txt2)}
 .ordem{display:inline-block;background:var(--verm);color:#fff;font-weight:800;font-size:11px;padding:2px 8px;border-radius:999px;margin-bottom:4px}
-.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
-.filtros button{border:1px solid var(--borda);background:#fff;border-radius:999px;padding:7px 14px;font-weight:600;cursor:pointer;font:inherit;font-size:13.5px}
-.filtros button.on{background:var(--verde2);color:#fff;border-color:var(--verde2)}
-.filtros input{flex:1;min-width:140px;border:1px solid var(--borda);border-radius:999px;padding:8px 14px;font:inherit}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:7px}
-.n{border-radius:12px;padding:8px 2px;text-align:center;font-weight:800;font-size:16px;border:2px solid transparent;user-select:none;font-variant-numeric:tabular-nums;position:relative}
-.n small{display:block;font-size:9.5px;font-weight:600;opacity:.85}
-.n.d{background:var(--verde-claro);color:var(--verde2);border-color:#bfe0c9;cursor:pointer}
-.n.d:hover{transform:translateY(-1px)}
-.n.d.sel{background:var(--verde2);color:#fff;border-color:var(--ouro2);box-shadow:0 0 0 2px var(--ouro2)}
-.n.v{background:#fdecec;color:#b45a5a;border-color:#f3c6c6;cursor:not-allowed}
-.n.r{background:#fff4e5;color:#a86a12;border-color:#f6cf98;cursor:not-allowed}
-.legenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--txt2);margin-top:12px}
-.legenda i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:4px;vertical-align:-2px}
-.pix{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fbf4dc;border:1px dashed var(--ouro);border-radius:12px;padding:12px}
-.pix code{font-size:16px;font-weight:700;word-break:break-all;flex:1}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:12px;padding:11px 16px;font-weight:700;cursor:pointer;text-decoration:none;font:inherit;font-weight:700}
-.btn.verde{background:linear-gradient(135deg,var(--verde2),var(--verde));color:#fff}
+.pix{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff;border:2px dashed var(--ouro);border-radius:14px;padding:12px}
+.pix code{font-size:16px;font-weight:800;word-break:break-all;flex:1}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:12px;padding:11px 16px;cursor:pointer;text-decoration:none;font:inherit;font-weight:700}
+.btn.verm{background:linear-gradient(135deg,var(--verm3),var(--verm2));color:#fff}
 .btn.zap{background:#25d366;color:#053d1d}
 .btn.claro{background:#fff;border:1px solid var(--borda);color:var(--txt)}
-.carrinho{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--borda);box-shadow:0 -8px 30px rgba(0,0,0,.12);padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;z-index:10}
+.agenda{display:flex;flex-direction:column;gap:8px}
+.ag{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--borda);border-radius:14px;padding:10px 12px}
+.ag .dt{min-width:60px;text-align:center;background:var(--verm);color:#fff;border-radius:12px;padding:6px 4px}
+.ag .dt b{display:block;font-size:17px}
+.ag .dt small{color:#ffd9dc;font-size:11px}
+.ag small{display:block;color:var(--txt2)}
+.aviso{overflow:hidden}
+.aviso img{width:100%;max-height:420px;object-fit:cover;display:block;cursor:zoom-in}
+.aviso .c{padding:14px 16px}
+.aviso h3{margin:0 0 4px;font-size:17px;color:var(--verm)}
+.aviso .data{font-size:12.5px;color:var(--txt2)}
+.aviso p{margin:8px 0 0;white-space:pre-line}
+.fixo{display:inline-block;background:var(--ouro2);color:#3b2700;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;margin-right:6px;vertical-align:2px}
+.galeria{columns:3 220px;column-gap:10px}
+.galeria figure{margin:0 0 10px;break-inside:avoid;border-radius:14px;overflow:hidden;background:#fff;cursor:zoom-in}
+.galeria img{width:100%;display:block}
+.galeria figcaption{padding:8px 10px;font-size:13px;color:var(--txt2)}
+.lightbox{position:fixed;inset:0;background:rgba(20,0,3,.92);z-index:50;display:grid;place-items:center;padding:16px}
+.lightbox img{max-width:100%;max-height:82vh;border-radius:12px}
+.lightbox p{color:#fff;text-align:center;margin:10px 0 0}
+.lightbox .x{position:absolute;top:12px;right:16px;font-size:34px;color:#fff;background:none;border:none;cursor:pointer}
+.lightbox .seta{position:absolute;top:50%;transform:translateY(-50%);font-size:34px;color:#fff;background:rgba(255,255,255,.12);border:none;border-radius:50%;width:52px;height:52px;cursor:pointer}
+.lightbox .ant{left:10px}.lightbox .prox{right:10px}
+.carrinho{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:4px solid var(--verm);box-shadow:0 -8px 30px rgba(0,0,0,.25);padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;z-index:10}
 .carrinho .info{flex:1;min-width:180px;max-width:520px}
-.carrinho b{color:var(--verde)}
-.oculto{display:none!important}
-.vazio{text-align:center;color:var(--txt2);padding:40px 16px}
-footer{text-align:center;color:var(--txt2);font-size:12.5px;padding:10px}
-.toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--verde);color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:20}
-@media (max-width:560px){.hero h1{font-size:26px}.stats b{font-size:18px}.grid{grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}}
+.carrinho b{color:var(--verm)}
+footer{position:relative;z-index:1;text-align:center;color:#ffd9dc;font-size:12.5px;padding:16px}
+.toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--verde);color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:60}
+@media (max-width:560px){.hero h1{font-size:34px}.stats b{font-size:19px}.grid{grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}.abas button{padding:8px 11px;font-size:13.5px}}
 </style>
 </head>
 <body>
+<div class="flocos" id="flocos"></div>
 <header class="hero">
-  <div class="flocos" id="flocos"></div>
-  <div class="arv">🎄</div>
-  <h1 id="titulo">Rifa Solidária</h1>
-  <p id="subtitulo">Carretinha de Natal</p>
-  <p id="sorteio"></p>
-  <span class="preco oculto" id="preco"></span>
+  <div class="luzes" id="luzes"></div>
+  <div class="logo" id="logo"><span>🎄</span></div>
+  <h1 id="titulo">Carretinha de Natal</h1>
+  <p class="sub" id="subtitulo">Rifa Solidária</p>
+  <div class="chips" id="chips"></div>
 </header>
 
-<main id="conteudo">
-  <div class="card vazio">Carregando a rifa…</div>
-</main>
+<nav class="abas" id="abas">
+  <button data-aba="rifa" class="on">🎟️ Rifa</button>
+  <button data-aba="avisos">📢 Avisos<span class="badge oculto" id="n-avisos"></span></button>
+  <button data-aba="fotos">📸 Fotos<span class="badge oculto" id="n-fotos"></span></button>
+</nav>
+
+<main id="conteudo"><div class="card vazio">Carregando…</div></main>
 
 <div class="carrinho oculto" id="carrinho">
   <div class="info"><b id="car-qtd"></b> · <span id="car-nums"></span><br><small>Total: <b id="car-total"></b></small></div>
   <button class="btn claro" id="car-limpar">Limpar</button>
-  <a class="btn zap" id="car-zap" target="_blank" rel="noopener">Pedir pelo WhatsApp</a>
+  <a class="btn zap" id="car-zap" target="_blank" rel="noopener">💬 Pedir pelo WhatsApp</a>
 </div>
 
-<footer>Feito com 💚 pela equipe da Carretinha · Conecta Finanças</footer>
+<footer>Feito com ❤️ pela equipe da Carretinha de Natal</footer>
 
 <script>
 'use strict';
@@ -112,43 +151,64 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const brl = (v) => (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const dataBR = (d) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '');
 const n2 = (n) => String(n).padStart(2, '0');
-let D = null, filtro = 'todos', busca = '';
+const url = (p) => (p ? sb.storage.from('natal-publico').getPublicUrl(p).data.publicUrl : '');
+const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+let D = null, aba = (['rifa', 'avisos', 'fotos'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'rifa'), filtro = 'todos', busca = '';
 const sel = new Set();
 
-(function () { const b = $('#flocos'); for (let i = 0; i < 16; i++) { const f = document.createElement('i'); f.textContent = '❄'; f.style.left = Math.random() * 100 + '%'; f.style.fontSize = 8 + Math.random() * 12 + 'px'; f.style.animationDuration = 7 + Math.random() * 10 + 's'; f.style.animationDelay = -Math.random() * 15 + 's'; b.appendChild(f); } })();
-
+$('#luzes').innerHTML = '<i></i>'.repeat(14);
+(function () { const b = $('#flocos'); for (let i = 0; i < 20; i++) { const f = document.createElement('i'); f.textContent = '❄'; f.style.left = Math.random() * 100 + '%'; f.style.fontSize = 8 + Math.random() * 12 + 'px'; f.style.animationDuration = 8 + Math.random() * 12 + 's'; f.style.animationDelay = -Math.random() * 15 + 's'; b.appendChild(f); } })();
 function toast(m) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
 
+document.querySelectorAll('#abas button').forEach((b) => { b.onclick = () => irAba(b.dataset.aba); });
+function irAba(a) { aba = a; history.replaceState(null, '', location.pathname + location.search + '#' + a); render(); const t = $('#abas').offsetTop; if (window.scrollY > t) window.scrollTo({ top: t, behavior: 'smooth' }); }
+window.irAba = irAba;
+
 async function carregar() {
-  if (!slug) { $('#conteudo').innerHTML = '<div class="card vazio">Link incompleto. Peça o link da rifa para a organização.</div>'; return; }
+  if (!slug) { $('#conteudo').innerHTML = '<div class="card vazio">Link incompleto. Peça o link para a organização.</div>'; return; }
   const { data, error } = await sb.rpc('natal_publico', { p_slug: slug });
-  if (error) { if (!D) $('#conteudo').innerHTML = `<div class="card vazio">Não foi possível carregar a rifa agora. Tente novamente em instantes.</div>`; return; }
-  if (!data) { $('#conteudo').innerHTML = '<div class="card vazio">Esta rifa não está disponível (link desativado ou incorreto).</div>'; return; }
+  if (error) { if (!D) $('#conteudo').innerHTML = '<div class="card vazio">Não foi possível carregar agora. Tente novamente em instantes.</div>'; return; }
+  if (!data) { $('#conteudo').innerHTML = '<div class="card vazio">Esta página não está disponível (link desativado ou incorreto).</div>'; return; }
   D = data;
-  // remove da seleção números que foram vendidos enquanto a pessoa escolhia
   for (const x of [...sel]) { const it = D.numeros.find((k) => k[0] === x); if (!it || it[2] !== 'd') sel.delete(x); }
-  render();
+  cabecalho(); render();
+}
+
+function cabecalho() {
+  document.title = `🎄 ${D.nome || D.evento} — Rifa Solidária`;
+  $('#logo').innerHTML = D.logo ? `<img src="${esc(url(D.logo))}" alt="${esc(D.nome)}">` : '<span>🎄</span>';
+  $('#titulo').textContent = D.nome || D.evento;
+  $('#subtitulo').textContent = `Rifa Solidária ${D.ano}${D.data_sorteio ? ' · sorteio em ' + dataBR(D.data_sorteio) : ''}`;
+  const insta = D.instagram ? D.instagram.replace(/^@/, '') : '';
+  $('#chips').innerHTML = `<span class="chip ouro">🎟️ ${brl(D.valor_numero)} por número</span>
+    ${insta ? `<a class="chip insta" href="https://instagram.com/${encodeURIComponent(insta)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>@${esc(insta)}</a>` : ''}
+    ${D.whatsapp ? `<a class="chip" href="https://wa.me/${esc(D.whatsapp)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}`;
+  const na = (D.avisos || []).length, nf = (D.fotos || []).length;
+  $('#n-avisos').textContent = na; $('#n-avisos').classList.toggle('oculto', !na);
+  $('#n-fotos').textContent = nf; $('#n-fotos').classList.toggle('oculto', !nf);
 }
 
 function render() {
-  const nome = `${D.evento} ${D.ano}`;
-  document.title = `🎄 Rifa Solidária — ${nome}`;
-  $('#titulo').textContent = 'Rifa Solidária';
-  $('#subtitulo').textContent = D.nome && D.nome !== D.evento ? `${D.nome} · ${nome}` : nome;
-  $('#sorteio').textContent = D.data_sorteio ? `🎁 Sorteio em ${dataBR(D.data_sorteio)}` : '';
-  $('#preco').textContent = `${brl(D.valor_numero)} por número`; $('#preco').classList.remove('oculto');
+  if (!D) return;
+  document.querySelectorAll('#abas button').forEach((b) => b.classList.toggle('on', b.dataset.aba === aba));
+  if (aba === 'avisos') return renderAvisos();
+  if (aba === 'fotos') return renderFotos();
+  renderRifa();
+}
+
+function renderRifa() {
   const nums = D.numeros.filter((x) => x[2] !== 'c');
   const disp = nums.filter((x) => x[2] === 'd').length, vend = nums.length - disp;
   const lista = nums.filter((x) => (filtro === 'todos' || (filtro === 'disp' ? x[2] === 'd' : x[2] !== 'd')) && (!busca || String(x[0]).includes(busca.replace(/^0+/, ''))));
-  const urlFoto = (p) => (p ? sb.storage.from('natal-publico').getPublicUrl(p).data.publicUrl : '');
+  const fixado = (D.avisos || []).find((a) => a.fixado);
   $('#conteudo').innerHTML = `
-    ${D.mensagem ? `<div class="card"><p style="margin:0;white-space:pre-line">${esc(D.mensagem)}</p></div>` : ''}
+    ${fixado ? `<div class="card faixa" style="cursor:pointer" onclick="irAba('avisos')"><b style="color:var(--verm)">📌 ${esc(fixado.titulo)}</b>${fixado.texto ? `<div class="dica" style="margin-top:4px">${esc(fixado.texto.slice(0, 160))}${fixado.texto.length > 160 ? '…' : ''}</div>` : ''}</div>` : ''}
+    ${D.mensagem ? `<div class="card faixa"><p style="margin:0;white-space:pre-line">${esc(D.mensagem)}</p></div>` : ''}
     <div class="card">
-      <div class="stats"><div><b>${disp}</b><small>disponíveis</small></div><div><b>${vend}</b><small>já vendidos</small></div><div><b>${nums.length}</b><small>números no total</small></div></div>
+      <div class="stats"><div><b>${disp}</b><small>disponíveis</small></div><div><b>${vend}</b><small>já vendidos</small></div><div><b>${nums.length}</b><small>números</small></div></div>
       <div class="barra"><i style="width:${nums.length ? (vend / nums.length) * 100 : 0}%"></i></div>
     </div>
-    ${(D.agenda || []).length ? `<div class="card"><h2>🗓️ Programação da Carretinha</h2><div class="agenda">${D.agenda.map((a) => `<div class="ag"><div class="dt">${a.data ? `<b>${dataBR(a.data).slice(0, 5)}</b><small>${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][new Date(a.data + 'T12:00').getDay()]}</small>` : '<b>—</b><small>a definir</small>'}</div><div><b>${esc(a.titulo)}</b><small>${[a.hora, a.local].filter(Boolean).map(esc).join(' · ')}</small></div></div>`).join('')}</div></div>` : ''}
-    ${D.premios.length ? `<div class="card"><h2>🎁 Prêmios</h2><div class="premios">${D.premios.map((p, i) => `<div class="premio"><div class="foto">${p.foto ? `<img src="${esc(urlFoto(p.foto))}" alt="${esc(p.nome)}" loading="lazy">` : '🎁'}</div><div class="c"><span class="ordem">${p.ordem || i + 1}º prêmio</span><b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ''}</div></div>`).join('')}</div></div>` : ''}
+    ${D.premios.length ? `<div class="card"><h2>🎁 Prêmios</h2><div class="premios">${D.premios.map((p, i) => `<div class="premio"><div class="foto">${p.foto ? `<img src="${esc(url(p.foto))}" alt="${esc(p.nome)}" loading="lazy">` : '🎁'}</div><div class="c"><span class="ordem">${p.ordem || i + 1}º prêmio</span><b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ''}</div></div>`).join('')}</div></div>` : ''}
     <div class="card"><h2>🎟️ Escolha seus números</h2>
       <div class="filtros">
         <button data-f="todos" class="${filtro === 'todos' ? 'on' : ''}">Todos</button>
@@ -156,36 +216,70 @@ function render() {
         <button data-f="vend" class="${filtro === 'vend' ? 'on' : ''}">Vendidos</button>
         <input type="search" id="busca" inputmode="numeric" placeholder="Procurar número…" value="${esc(busca)}">
       </div>
-      ${nums.length ? `<div class="grid">${lista.map((x) => `<div class="n ${x[2]}${sel.has(x[0]) ? ' sel' : ''}" data-n="${x[0]}" title="${x[2] === 'd' ? 'Disponível — toque para escolher' : x[2] === 'r' ? 'Reservado' : 'Vendido'}">${n2(x[0])}<small>${x[2] === 'd' ? 'livre' : x[2] === 'r' ? 'reservado' : esc(x[3] || 'vendido')}</small></div>`).join('') || '<p class="vazio">Nenhum número encontrado.</p>'}</div>` : '<p class="vazio">Os números ainda não foram liberados.</p>'}
-      <div class="legenda"><span><i style="background:#e7f3ea;border:1px solid #bfe0c9"></i>Disponível</span><span><i style="background:#166534"></i>Selecionado</span><span><i style="background:#fdecec;border:1px solid #f3c6c6"></i>Vendido</span></div>
+      ${nums.length ? `<div class="grid">${lista.map((x) => `<div class="n ${x[2]}${sel.has(x[0]) ? ' sel' : ''}" data-n="${x[0]}">${n2(x[0])}<small>${x[2] === 'd' ? 'livre' : x[2] === 'r' ? 'reservado' : esc(x[3] || 'vendido')}</small></div>`).join('') || '<p class="vazio">Nenhum número encontrado.</p>'}</div>` : '<p class="vazio">Os números ainda não foram liberados.</p>'}
+      <div class="legenda"><span><i style="background:#fff;border:1px solid #cfe6d6"></i>Disponível</span><span><i style="background:#1f7a45"></i>Selecionado</span><span><i style="background:#fdeced;border:1px solid #f3c6ca"></i>Vendido</span></div>
     </div>
-    ${D.pix_chave ? `<div class="card"><h2>💳 Pagamento via PIX</h2><div class="pix"><code id="pix">${esc(D.pix_chave)}</code><button class="btn verde" id="copiar-pix">Copiar chave</button></div>${D.pix_nome ? `<p style="margin:8px 0 0;color:var(--txt2)">Recebedor: <b>${esc(D.pix_nome)}</b></p>` : ''}<p style="margin:8px 0 0;color:var(--txt2);font-size:13.5px">Depois de pagar, envie o comprovante pelo WhatsApp informando seus números. A reserva é confirmada pela equipe.</p></div>` : ''}
-    ${D.whatsapp ? `<div class="card" style="text-align:center"><p style="margin:0 0 10px">Dúvidas ou quer comprar um bloquinho inteiro?</p><a class="btn zap" href="https://wa.me/${esc(D.whatsapp)}?text=${encodeURIComponent('Olá! Vi a Rifa Solidária da ' + nome + ' e quero participar.')}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div>` : ''}`;
-  document.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { filtro = b.dataset.f; render(); }; });
-  const bi = $('#busca'); if (bi) bi.oninput = (e) => { busca = e.target.value.replace(/\D/g, ''); const pos = e.target.selectionStart; render(); const nb = $('#busca'); nb.focus(); nb.setSelectionRange(pos, pos); };
+    ${D.pix_chave ? `<div class="card"><h2>💳 Pagamento via PIX</h2><div class="pix"><code>${esc(D.pix_chave)}</code><button class="btn verm" id="copiar-pix">Copiar chave</button></div>${D.pix_nome ? `<p class="dica" style="margin:8px 0 0">Recebedor: <b>${esc(D.pix_nome)}</b></p>` : ''}<p class="dica" style="margin:8px 0 0">Depois de pagar, envie o comprovante pelo WhatsApp informando seus números. A reserva é confirmada pela equipe.</p></div>` : ''}
+    ${(D.agenda || []).length ? `<div class="card"><h2>🗓️ Programação</h2><div class="agenda">${D.agenda.map((a) => `<div class="ag"><div class="dt">${a.data ? `<b>${dataBR(a.data).slice(0, 5)}</b><small>${SEM[new Date(a.data + 'T12:00').getDay()]}</small>` : '<b>—</b><small>a definir</small>'}</div><div><b>${esc(a.titulo)}</b><small>${[a.hora, a.local].filter(Boolean).map(esc).join(' · ')}</small></div></div>`).join('')}</div></div>` : ''}`;
+  document.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { filtro = b.dataset.f; renderRifa(); }; });
+  const bi = $('#busca'); if (bi) bi.oninput = (e) => { busca = e.target.value.replace(/\D/g, ''); renderRifa(); const nb = $('#busca'); nb.focus(); nb.setSelectionRange(nb.value.length, nb.value.length); };
   document.querySelectorAll('.n.d').forEach((el) => { el.onclick = () => { const k = +el.dataset.n; sel.has(k) ? sel.delete(k) : sel.add(k); el.classList.toggle('sel'); carrinho(); }; });
   const cp = $('#copiar-pix'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(D.pix_chave); toast('Chave PIX copiada'); } catch (e) { prompt('Copie a chave PIX:', D.pix_chave); } };
   carrinho();
 }
 
+function renderAvisos() {
+  carrinho();
+  const av = D.avisos || [];
+  $('#conteudo').innerHTML = av.length ? av.map((a) => `<article class="aviso card" style="padding:0">
+      ${a.foto ? `<img src="${esc(url(a.foto))}" alt="" loading="lazy" data-zoom="${esc(url(a.foto))}">` : ''}
+      <div class="c"><h3>${a.fixado ? '<span class="fixo">📌 Fixado</span>' : ''}${esc(a.titulo)}</h3><span class="data">${dataBR(a.data)}</span>${a.texto ? `<p>${esc(a.texto)}</p>` : ''}</div></article>`).join('')
+    : '<div class="card vazio">📢 Nenhum aviso por enquanto. Volte em breve!</div>';
+  document.querySelectorAll('[data-zoom]').forEach((im) => { im.onclick = () => lightbox([{ src: im.dataset.zoom, legenda: '' }], 0); });
+}
+
+function renderFotos() {
+  carrinho();
+  const fs = (D.fotos || []).map((f) => ({ src: url(f.foto), legenda: f.legenda }));
+  $('#conteudo').innerHTML = fs.length ? `<div class="card"><h2>📸 Fotos da Carretinha</h2><div class="galeria">${fs.map((f, i) => `<figure data-i="${i}"><img src="${esc(f.src)}" alt="${esc(f.legenda || '')}" loading="lazy">${f.legenda ? `<figcaption>${esc(f.legenda)}</figcaption>` : ''}</figure>`).join('')}</div></div>`
+    : '<div class="card vazio">📸 As fotos da Carretinha vão aparecer aqui!</div>';
+  document.querySelectorAll('.galeria figure').forEach((f) => { f.onclick = () => lightbox(fs, +f.dataset.i); });
+}
+
+function lightbox(lista, i) {
+  const box = document.createElement('div'); box.className = 'lightbox';
+  const passo = (d) => { i = (i + d + lista.length) % lista.length; mostra(); };
+  const mostra = () => {
+    const f = lista[i];
+    box.innerHTML = `<button class="x" aria-label="Fechar">×</button>${lista.length > 1 ? '<button class="seta ant" aria-label="Anterior">‹</button><button class="seta prox" aria-label="Próxima">›</button>' : ''}<div><img src="${esc(f.src)}" alt=""><p>${esc(f.legenda || '')}</p></div>`;
+    box.querySelector('.x').onclick = fechar;
+    const a = box.querySelector('.ant'), p = box.querySelector('.prox');
+    if (a) a.onclick = (e) => { e.stopPropagation(); passo(-1); };
+    if (p) p.onclick = (e) => { e.stopPropagation(); passo(1); };
+  };
+  const tecla = (e) => { if (e.key === 'Escape') fechar(); if (lista.length > 1 && e.key === 'ArrowRight') passo(1); if (lista.length > 1 && e.key === 'ArrowLeft') passo(-1); };
+  const fechar = () => { box.remove(); document.removeEventListener('keydown', tecla); };
+  box.onclick = (e) => { if (e.target === box) fechar(); };
+  document.addEventListener('keydown', tecla);
+  mostra(); document.body.appendChild(box);
+}
+
 function carrinho() {
   const box = $('#carrinho');
-  if (!sel.size || !D) { box.classList.add('oculto'); return; }
+  if (!sel.size || !D || aba !== 'rifa') { box.classList.add('oculto'); return; }
   const lista = [...sel].sort((a, b) => a - b);
   const total = lista.length * Number(D.valor_numero);
   $('#car-qtd').textContent = `${lista.length} número(s)`;
   $('#car-nums').textContent = lista.map(n2).join(', ');
   $('#car-total').textContent = brl(total);
-  const msg = `Olá! Quero comprar ${lista.length === 1 ? 'o número' : 'os números'} ${lista.map(n2).join(', ')} da Rifa Solidária (${D.evento} ${D.ano}). Total: ${brl(total)}.\nMeu nome: \nMeu telefone: `;
-  const zap = $('#car-zap');
-  if (D.whatsapp) { zap.href = `https://wa.me/${D.whatsapp}?text=${encodeURIComponent(msg)}`; zap.classList.remove('oculto'); }
-  else { zap.href = `https://wa.me/?text=${encodeURIComponent(msg)}`; }
+  const msg = `Olá! Quero comprar ${lista.length === 1 ? 'o número' : 'os números'} ${lista.map(n2).join(', ')} da Rifa Solidária (${D.nome || D.evento} ${D.ano}). Total: ${brl(total)}.\nMeu nome: \nMeu telefone: `;
+  $('#car-zap').href = D.whatsapp ? `https://wa.me/${D.whatsapp}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
   box.classList.remove('oculto');
 }
-$('#car-limpar').onclick = () => { sel.clear(); render(); };
+$('#car-limpar').onclick = () => { sel.clear(); renderRifa(); };
 
 carregar();
-setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
+setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.lightbox') && document.activeElement?.id !== 'busca') carregar(); }, 60000);
 </script>
 </body>
 </html>
