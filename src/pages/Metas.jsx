@@ -3,6 +3,7 @@ import { useApp, mediaDespesasMensal } from '../store'
 import { supabase, erroMsg } from '../supabase'
 import { brl, CORES, dataBR, hojeISO, num } from '../lib'
 import Modal from '../components/Modal'
+import Acoes from '../components/Acoes'
 
 export const MODELOS_META = [
   { icone: '✈️', nome: 'Viagem', cor: '#0ea5e9' },
@@ -111,7 +112,7 @@ function CartaoMeta({ m, media, editar, movimentar, detalhes }) {
     <section className="card meta">
       <div className="entre">
         <h3 onClick={() => detalhes(m)} className="clicavel"><span className="meta-ic" style={{ background: m.cor + '26' }}>{m.icone}</span>{m.nome}</h3>
-        <button className="link" onClick={() => editar(m)}>Editar</button>
+        <span><button className="link" onClick={() => editar(m)}>✏️ Editar</button> <button className="link" style={{ color: '#fb7185', marginLeft: 10 }} onClick={() => editar({ ...m, _x: true })}>🗑 Excluir</button></span>
       </div>
       {m.descricao && <p className="dica">{m.descricao}</p>}
       <div className="meta-num"><b>{brl(atual)}</b>{alvo && <span>de {brl(alvo)}</span>}</div>
@@ -185,6 +186,7 @@ function Historico({ meta, fechar, abrirMov }) {
               <li key={x.id} onClick={() => setEdMov(x)} title="Toque para editar">
                 <div className="info"><b>{x.valor > 0 ? 'Guardou' : 'Retirou'}{x.descricao ? ` · ${x.descricao}` : ''}</b><small>{dataBR(x.data)} · {app.nomeMembro(x.user_id)}</small></div>
                 <div className="dir"><span className={x.valor > 0 ? 'txt-verde' : 'txt-vermelho'}>{x.valor > 0 ? '+' : '−'}{brl(Math.abs(x.valor))}</span></div>
+                <Acoes editar={() => setEdMov(x)} excluir={() => setEdMov({ ...x, _x: true })} />
               </li>
             ))}
           </ul>
@@ -204,7 +206,7 @@ function EditarMovimento({ mov, meta, fechar }) {
   const [data, setData] = useState(mov.data)
   const [descricao, setDescricao] = useState(mov.descricao || '')
   const [erro, setErro] = useState(null)
-  const [confirma, setConfirma] = useState(false)
+  const [confirma, setConfirma] = useState(!!mov._x)
   const [enviando, setEnviando] = useState(false)
 
   async function aplicar(novoValor) {
@@ -282,7 +284,7 @@ function FormMeta({ meta, media, fechar }) {
     meses_reserva: meta.meses_reserva || 6,
   })
   const [erro, setErro] = useState(null)
-  const [confirma, setConfirma] = useState(false)
+  const [confirma, setConfirma] = useState(!!meta._x)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
   const sugestaoReserva = media > 0 ? Math.round(media * Number(f.meses_reserva || 6)) : 0
 

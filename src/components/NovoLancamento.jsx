@@ -40,7 +40,7 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
   const [obs, setObs] = useState(ed?.observacao || '')
   const [erro, setErro] = useState(null)
   const [salvando, setSalvando] = useState(false)
-  const [confirmaExcluir, setConfirmaExcluir] = useState(false)
+  const [confirmaExcluir, setConfirmaExcluir] = useState(!!editar?._x)
   const [faturaMes, setFaturaMes] = useState(ed?.fatura_ref ? ed.fatura_ref.slice(0, 7) : mesISO())
   const [todas, setTodas] = useState(false) // editar todas as parcelas da compra
   const ehParcelado = !!(ed?.compra_id && ed.parcela_total > 1)
@@ -75,6 +75,8 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
     setErro(null)
     if (!descricao.trim()) return setErro('Informe uma descrição.')
     if (!(v > 0)) return setErro('Informe um valor maior que zero.')
+    const ano = Number(String(data).slice(0, 4))
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || ano < 2000 || ano > 2100) return setErro('Data inválida: confira o ano (ex.: 2026).')
     if (ehCartao && !cartao && !ed) return setErro('Cadastre um cartão primeiro (aba Cartões).')
     setSalvando(true)
     try {

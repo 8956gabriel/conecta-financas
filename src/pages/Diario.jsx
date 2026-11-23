@@ -4,6 +4,7 @@ import { useApp } from '../store'
 import { brl, hojeISO, mesISO, nomeMes, statusLabel, atrasado } from '../lib'
 import { SeletorMes } from './Dashboard'
 import NovoLancamento from '../components/NovoLancamento'
+import Acoes from '../components/Acoes'
 
 const SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 const SEMANA_LONGA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
@@ -157,6 +158,7 @@ export default function Diario() {
                           ? <span className="badge st-fatura">Na fatura</span>
                           : <span className={'badge ' + (atrasado(l) ? 'st-atrasado' : 'st-' + l.status)}>{atrasado(l) ? 'Atrasado' : statusLabel(l.status, l.tipo)}</span>}
                       </div>
+                      <Acoes editar={() => setEditar(l)} excluir={() => setEditar({ ...l, _x: true })} />
                     </li>
                   )
                 })}

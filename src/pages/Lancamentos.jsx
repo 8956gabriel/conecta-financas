@@ -4,6 +4,7 @@ import { supabase, erroMsg } from '../supabase'
 import { atrasado, brl, dataBR, mesISO, statusLabel } from '../lib'
 import { SeletorMes } from './Dashboard'
 import NovoLancamento from '../components/NovoLancamento'
+import Acoes from '../components/Acoes'
 
 export default function Lancamentos({ abrirNovo }) {
   const app = useApp()
@@ -110,6 +111,7 @@ export default function Lancamentos({ abrirNovo }) {
                     </button>
                   )}
                 </div>
+                <Acoes editar={() => setEditar(l)} excluir={() => setEditar({ ...l, _x: true })} />
               </li>
             )
           })}

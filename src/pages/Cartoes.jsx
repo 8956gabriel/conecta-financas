@@ -4,6 +4,7 @@ import { supabase, erroMsg } from '../supabase'
 import { brl, CORES, dataBR, hojeISO, mesISO, nomeMes, num } from '../lib'
 import Modal from '../components/Modal'
 import NovoLancamento from '../components/NovoLancamento'
+import Acoes from '../components/Acoes'
 
 export default function Cartoes() {
   const app = useApp()
@@ -29,7 +30,7 @@ export default function Cartoes() {
             return (
               <div key={c.id} className={'cartao-visual' + (sel?.id === c.id ? ' sel' : '') + (c.ativo ? '' : ' inativo')}
                 style={{ background: `linear-gradient(135deg, ${c.cor}, ${c.cor}99)` }} onClick={() => setSelId(c.id)}>
-                <div className="entre"><b>{c.nome}</b><button className="mini" onClick={(e) => { e.stopPropagation(); setForm(c) }}>Editar</button></div>
+                <div className="entre"><b>{c.nome}</b><span><button className="mini" onClick={(e) => { e.stopPropagation(); setForm(c) }}>✏️ Editar</button> <button className="mini" onClick={(e) => { e.stopPropagation(); setForm({ ...c, _x: true }) }}>🗑 Excluir</button></span></div>
                 <small>{c.bandeira || 'Cartão'}{c.dono_id ? ` · ${app.nomeMembro(c.dono_id)}` : ' · do casal'}</small>
                 <div className="barra claro"><i style={{ width: pct + '%' }} /></div>
                 <div className="entre"><small>Usado {brl(uso)}</small><small>Livre {brl(Math.max(0, c.limite - uso))}</small></div>
@@ -78,7 +79,7 @@ function Faturas({ cartao }) {
                     {f.itens.sort((a, b) => a.created_at.localeCompare(b.created_at)).map((l) => (
                       <li key={l.id} onClick={() => setEditar(l)}>
                         <span>{l.descricao}{l.parcela_total > 1 && <small> {l.parcela_num}/{l.parcela_total}</small>}<small> · {app.nomeMembro(l.user_id)}</small></span>
-                        <span>{brl(l.valor)}</span>
+                        <span>{brl(l.valor)} <Acoes editar={() => setEditar(l)} excluir={() => setEditar({ ...l, _x: true })} /></span>
                       </li>
                     ))}
                   </ul>
@@ -157,7 +158,7 @@ function FormCartao({ cartao, fechar }) {
     cor: ed?.cor || CORES[1], dono_id: ed ? ed.dono_id || '' : app.uid, ativo: ed?.ativo ?? true,
   })
   const [erro, setErro] = useState(null)
-  const [confirma, setConfirma] = useState(false)
+  const [confirma, setConfirma] = useState(!!cartao._x)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
 
   async function salvar(e) {

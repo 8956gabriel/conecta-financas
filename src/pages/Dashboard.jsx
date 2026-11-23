@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveCo
 import { useApp, saldoConta, usoCartao, faturasDoCartao } from '../store'
 import { addMeses, atrasado, brl, dataBR, hojeISO, mesCurto, mesISO, nomeMes, statusLabel } from '../lib'
 import NovoLancamento from '../components/NovoLancamento'
+import Acoes from '../components/Acoes'
 
 export function SeletorMes({ mes, setMes }) {
   return (
@@ -127,6 +128,7 @@ export default function Dashboard({ irPara }) {
                     <span className={l.tipo === 'receita' ? 'txt-verde' : 'txt-vermelho'}>{brl(l.valor)}</span>
                     <span className={'badge ' + (atrasado(l) ? 'st-atrasado' : 'st-' + l.status)}>{atrasado(l) ? 'Atrasado' : statusLabel(l.status, l.tipo)}</span>
                   </div>
+                  <Acoes editar={() => setEditar(l)} excluir={() => setEditar({ ...l, _x: true })} />
                 </li>
               ))}
             </ul>

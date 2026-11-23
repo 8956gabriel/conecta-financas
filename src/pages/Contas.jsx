@@ -3,6 +3,7 @@ import { useApp, saldoConta } from '../store'
 import { supabase, erroMsg } from '../supabase'
 import { brl, CORES, num, TIPOS_CONTA } from '../lib'
 import Modal from '../components/Modal'
+import Acoes from '../components/Acoes'
 
 export default function Contas() {
   const app = useApp()
@@ -31,6 +32,7 @@ export default function Contas() {
             <span className="cat-ic" style={{ background: c.cor + '26', color: c.cor }}>◎</span>
             <div className="info"><b>{c.nome}</b><small>{TIPOS_CONTA[c.tipo]} · {c.dono_id ? app.nomeMembro(c.dono_id) : 'do casal'}{c.ativo ? '' : ' · inativa'}</small></div>
             <div className="dir"><b>{brl(saldoConta(c, app.lancamentos))}</b></div>
+            <Acoes editar={() => setForm(c)} excluir={() => setForm({ ...c, _x: true })} />
           </li>
         ))}
       </ul>
@@ -47,7 +49,7 @@ function FormConta({ conta, fechar }) {
     cor: ed?.cor || CORES[8], dono_id: ed ? ed.dono_id || '' : '', ativo: ed?.ativo ?? true,
   })
   const [erro, setErro] = useState(null)
-  const [confirma, setConfirma] = useState(false)
+  const [confirma, setConfirma] = useState(!!conta._x)
   const set = (k) => (e) => setF({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })
 
   async function salvar(e) {
