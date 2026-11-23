@@ -78,6 +78,14 @@ function Categorias() {
   const [nome, setNome] = useState('')
   const [cor, setCor] = useState(CORES[0])
   const lista = app.categorias.filter((c) => c.tipo === tipo)
+  const [ed, setEd] = useState(null) // { id, nome, cor }
+  async function salvarEd(e) {
+    e.preventDefault()
+    if (!ed.nome.trim()) return
+    const { error } = await supabase.from('categorias').update({ nome: ed.nome.trim(), cor: ed.cor }).eq('id', ed.id)
+    if (error) return app.avisar(erroMsg(error), 'erro')
+    setEd(null); await app.carregar(); app.avisar('Categoria atualizada')
+  }
   async function add(e) {
     e.preventDefault()
     if (!nome.trim()) return
@@ -102,11 +110,21 @@ function Categorias() {
       <ul className="chips">
         {lista.map((c) => (
           <li key={c.id} style={{ borderColor: c.cor }}>
-            <i className="dot" style={{ background: c.cor }} />{c.nome}
+            <span className="clicavel" onClick={() => setEd({ id: c.id, nome: c.nome, cor: c.cor })} title="Editar"><i className="dot" style={{ background: c.cor }} />{c.nome}</span>
+            <button onClick={() => setEd({ id: c.id, nome: c.nome, cor: c.cor })} title="Editar">✎</button>
             <button onClick={() => remover(c)} title="Remover">{aRemover === c.id ? 'confirmar?' : '×'}</button>
           </li>
         ))}
       </ul>
+      {ed && (
+        <form className="linha-add" onSubmit={salvarEd}>
+          <input value={ed.nome} onChange={(e) => setEd({ ...ed, nome: e.target.value })} autoFocus />
+          <input type="color" value={ed.cor} onChange={(e) => setEd({ ...ed, cor: e.target.value })} aria-label="Cor" />
+          <button className="btn primario">Salvar</button>
+          <button type="button" className="btn" onClick={() => setEd(null)}>Cancelar</button>
+        </form>
+      )}
+      <p className="dica">Toque no nome de uma categoria para editar.</p>
       <form className="linha-add" onSubmit={add}>
         <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nova categoria" />
         <input type="color" value={cor} onChange={(e) => setCor(e.target.value)} aria-label="Cor" />

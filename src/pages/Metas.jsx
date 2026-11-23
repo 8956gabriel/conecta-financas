@@ -173,6 +173,8 @@ function Historico({ meta, fechar, abrirMov }) {
   const lista = (app.movimentos || []).filter((x) => x.meta_id === meta.id)
   const guardado = lista.filter((x) => x.valor > 0).reduce((s, x) => s + Number(x.valor), 0)
   const retirado = lista.filter((x) => x.valor < 0).reduce((s, x) => s - Number(x.valor), 0)
+  const [edMov, setEdMov] = useState(null)
+  if (edMov) return <EditarMovimento mov={edMov} meta={meta} fechar={() => setEdMov(null)} />
   return (
     <Modal titulo={`${meta.icone} ${meta.nome}`} fechar={fechar}>
       <div className="form">
@@ -180,7 +182,7 @@ function Historico({ meta, fechar, abrirMov }) {
         {lista.length === 0 ? <p className="vazio">Nenhuma movimentação ainda.</p> : (
           <ul className="lista">
             {lista.map((x) => (
-              <li key={x.id} className="sem-click">
+              <li key={x.id} onClick={() => setEdMov(x)} title="Toque para editar">
                 <div className="info"><b>{x.valor > 0 ? 'Guardou' : 'Retirou'}{x.descricao ? ` · ${x.descricao}` : ''}</b><small>{dataBR(x.data)} · {app.nomeMembro(x.user_id)}</small></div>
                 <div className="dir"><span className={x.valor > 0 ? 'txt-verde' : 'txt-vermelho'}>{x.valor > 0 ? '+' : '−'}{brl(Math.abs(x.valor))}</span></div>
               </li>
@@ -189,6 +191,80 @@ function Historico({ meta, fechar, abrirMov }) {
         )}
         <div className="acoes"><span className="flex1" /><button className="btn" onClick={() => { fechar(); abrirMov({ meta, retirar: true }) }}>− Retirar</button><button className="btn receita" onClick={() => { fechar(); abrirMov({ meta, retirar: false }) }}>+ Guardar</button></div>
       </div>
+    </Modal>
+  )
+}
+
+// Edita ou exclui uma movimentação e ajusta o saldo da meta pela diferença
+function EditarMovimento({ mov, meta, fechar }) {
+  const app = useApp()
+  const antigo = Number(mov.valor)
+  const [retirar, setRetirar] = useState(antigo < 0)
+  const [valor, setValor] = useState(String(Math.abs(antigo)).replace('.', ','))
+  const [data, setData] = useState(mov.data)
+  const [descricao, setDescricao] = useState(mov.descricao || '')
+  const [erro, setErro] = useState(null)
+  const [confirma, setConfirma] = useState(false)
+  const [enviando, setEnviando] = useState(false)
+
+  async function aplicar(novoValor) {
+    const delta = novoValor - antigo
+    const saldo = Number(meta.valor_atual) + delta
+    if (saldo < 0) throw new Error('Com essa alteração o saldo ficaria negativo.')
+    if (delta !== 0) {
+      const { error } = await supabase.from('metas').update({ valor_atual: saldo }).eq('id', meta.id)
+      if (error) throw error
+    }
+  }
+  async function salvar(e) {
+    e.preventDefault()
+    setErro(null)
+    const v = num(valor)
+    if (!(v > 0)) return setErro('Informe um valor maior que zero.')
+    const novo = retirar ? -v : v
+    setEnviando(true)
+    try {
+      const { error } = await supabase.from('metas_movimentos').update({ valor: novo, data, descricao: descricao.trim() || null }).eq('id', mov.id)
+      if (error) throw error
+      await aplicar(novo)
+      await app.carregar(); app.avisar('Movimentação atualizada'); fechar()
+    } catch (err) { setErro(erroMsg(err)) } finally { setEnviando(false) }
+  }
+  async function excluir() {
+    setEnviando(true)
+    try {
+      await aplicar(0)
+      const { error } = await supabase.from('metas_movimentos').delete().eq('id', mov.id)
+      if (error) throw error
+      await app.carregar(); app.avisar('Movimentação excluída'); fechar()
+    } catch (err) { setErro(erroMsg(err)) } finally { setEnviando(false) }
+  }
+
+  return (
+    <Modal titulo={`Editar movimentação · ${meta.nome}`} fechar={fechar}>
+      <form className="form" onSubmit={salvar}>
+        <div className="seg full">
+          <button type="button" className={!retirar ? 'on receita' : ''} onClick={() => setRetirar(false)}>Guardou</button>
+          <button type="button" className={retirar ? 'on despesa' : ''} onClick={() => setRetirar(true)}>Retirou</button>
+        </div>
+        <div className="linha2">
+          <label>Valor<input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} /></label>
+          <label>Data<input type="date" value={data} onChange={(e) => setData(e.target.value)} required /></label>
+        </div>
+        <label>Descrição<input value={descricao} onChange={(e) => setDescricao(e.target.value)} /></label>
+        {erro && <div className="aviso erro">{erro}</div>}
+        <div className="acoes">
+          {!confirma && <button type="button" className="btn perigo" onClick={() => setConfirma(true)}>Excluir</button>}
+          <span className="flex1" /><button type="button" className="btn" onClick={fechar}>Voltar</button>
+          <button className="btn primario" disabled={enviando}>Salvar</button>
+        </div>
+        {confirma && (
+          <div className="confirma">
+            <p>Excluir esta movimentação? O saldo da meta será ajustado.</p>
+            <div className="acoes"><button type="button" className="btn" onClick={() => setConfirma(false)}>Não</button><button type="button" className="btn perigo" disabled={enviando} onClick={excluir}>Excluir</button></div>
+          </div>
+        )}
+      </form>
     </Modal>
   )
 }

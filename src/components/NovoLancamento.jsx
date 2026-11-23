@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import Modal from './Modal'
 import { supabase, erroMsg } from '../supabase'
 import { useApp } from '../store'
-import { brl, hojeISO, num, statusLabel } from '../lib'
+import { brl, hojeISO, mesISO, num, statusLabel } from '../lib'
 
 // soma meses a uma data ISO mantendo o dia (limitado ao fim do mês)
 function maisMeses(iso, n) {
@@ -10,6 +10,13 @@ function maisMeses(iso, n) {
   const ultimo = new Date(y, m - 1 + n + 1, 0).getDate()
   const dt = new Date(y, m - 1 + n, Math.min(d, ultimo))
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
+// dia X do mês "AAAA-MM" (limitado ao último dia do mês)
+function diaNoMes(mes, dia) {
+  const [y, m] = mes.split('-').map(Number)
+  const ultimo = new Date(y, m, 0).getDate()
+  return `${mes}-${String(Math.min(Number(dia) || 1, ultimo)).padStart(2, '0')}`
 }
 
 export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, editar, fechar }) {
@@ -34,6 +41,22 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
   const [erro, setErro] = useState(null)
   const [salvando, setSalvando] = useState(false)
   const [confirmaExcluir, setConfirmaExcluir] = useState(false)
+  const [faturaMes, setFaturaMes] = useState(ed?.fatura_ref ? ed.fatura_ref.slice(0, 7) : mesISO())
+  const [todas, setTodas] = useState(false) // editar todas as parcelas da compra
+  const ehParcelado = !!(ed?.compra_id && ed.parcela_total > 1)
+  const edCartao = !!ed?.cartao_id
+
+  function trocarCartao(id) {
+    setCartao(id)
+    const c = app.cartao(id)
+    if (edCartao && c) setData(diaNoMes(faturaMes, c.dia_vencimento))
+  }
+  function trocarFatura(mes) {
+    if (!mes) return
+    setFaturaMes(mes)
+    const c = app.cartao(cartao)
+    if (c) setData(diaNoMes(mes, c.dia_vencimento))
+  }
 
   const cats = app.categorias.filter((c) => c.tipo === tipo)
   const v = num(valor)
@@ -56,12 +79,44 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
     setSalvando(true)
     try {
       if (ed) {
-        const { error } = await supabase.from('lancamentos').update({
-          descricao: descricao.trim(), valor: v, data, categoria_id: categoria || null, user_id: resp,
-          conta_id: ed.cartao_id && ed.status !== 'concluido' ? null : conta || null,
+        const desc = descricao.trim()
+        const upd = {
+          tipo, descricao: desc, valor: v, data, categoria_id: categoria || null, user_id: resp,
           status, observacao: obs || null,
-        }).eq('id', ed.id)
+        }
+        if (edCartao) {
+          if (!cartao) throw new Error('Escolha o cartão.')
+          upd.cartao_id = cartao
+          upd.fatura_ref = faturaMes + '-01'
+          upd.conta_id = status === 'concluido' ? conta || null : null
+        } else {
+          upd.conta_id = conta || null
+        }
+        const { error } = await supabase.from('lancamentos').update(upd).eq('id', ed.id)
         if (error) throw error
+
+        if (todas && ehParcelado) {
+          // aplica descrição, categoria, responsável, cartão e valor da parcela às demais parcelas
+          const mudouValor = v !== Number(ed.valor)
+          const novoCartao = edCartao ? app.cartao(cartao) : null
+          const outras = app.lancamentos.filter((l) => l.compra_id === ed.compra_id && l.id !== ed.id)
+          const res = await Promise.all(outras.map((l) => {
+            const u = { descricao: desc, categoria_id: categoria || null, user_id: resp }
+            if (mudouValor) u.valor = v
+            if (novoCartao && novoCartao.id !== l.cartao_id) {
+              u.cartao_id = novoCartao.id
+              if (l.fatura_ref) u.data = diaNoMes(l.fatura_ref.slice(0, 7), novoCartao.dia_vencimento)
+            }
+            return supabase.from('lancamentos').update(u).eq('id', l.id)
+          }))
+          const e2 = res.find((r) => r.error)
+          if (e2) throw e2.error
+          const uc = { descricao: desc, categoria_id: categoria || null, user_id: resp }
+          if (mudouValor) uc.valor_total = Math.round(v * ed.parcela_total * 100) / 100
+          if (novoCartao) uc.cartao_id = novoCartao.id
+          const { error: e3 } = await supabase.from('compras').update(uc).eq('id', ed.compra_id)
+          if (e3) throw e3
+        }
       } else if (tipo === 'despesa' && (ehCartao || modo === 'parcelado')) {
         const { error } = await supabase.rpc('criar_compra', {
           p_descricao: descricao.trim(), p_valor_total: v, p_parcelas: nParcelas, p_data: data,
@@ -82,7 +137,7 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
         if (error) throw error
       }
       await app.carregar()
-      app.avisar(ed ? 'Lançamento atualizado' : 'Lançamento salvo')
+      app.avisar(ed ? (todas && ehParcelado ? 'Todas as parcelas atualizadas' : 'Lançamento atualizado') : 'Lançamento salvo')
       fechar()
     } catch (err) {
       setErro(erroMsg(err))
@@ -107,7 +162,7 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
   return (
     <Modal titulo={ed ? 'Editar lançamento' : 'Novo lançamento'} fechar={fechar}>
       <form className="form" onSubmit={salvar}>
-        {!ed && (
+        {(!ed || (!ed.compra_id && !ed.cartao_id)) && (
           <div className="seg full tipo">
             <button type="button" className={tipo === 'despesa' ? 'on despesa' : ''} onClick={() => { setTipo('despesa'); setCategoria('') }}>Despesa</button>
             <button type="button" className={tipo === 'receita' ? 'on receita' : ''} onClick={() => { setTipo('receita'); setCategoria(''); setForma('conta'); if (modo === 'parcelado') setModo('unica') }}>Receita</button>
@@ -117,7 +172,7 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
         <label>Descrição<input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder={tipo === 'receita' ? 'Ex.: Salário' : 'Ex.: Mercado'} autoFocus={!ed} /></label>
 
         <div className="linha2">
-          <label>{nParcelas > 1 && !ed ? 'Valor total' : 'Valor'}<input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" /></label>
+          <label>{nParcelas > 1 && !ed ? 'Valor total' : todas && ehParcelado ? 'Valor de cada parcela' : 'Valor'}<input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" /></label>
           <label>{ehCartao && !ed ? 'Data da compra' : 'Data'}<input type="date" value={data} onChange={(e) => setData(e.target.value)} required /></label>
         </div>
 
@@ -158,14 +213,35 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
         )}
         {resumo && <p className="dica destaque">{resumo}</p>}
 
-        {(ehCartao && !ed) ? (
+        {edCartao && (
+          <div className="linha2">
+            <label>Cartão
+              <select value={cartao} onChange={(e) => trocarCartao(e.target.value)}>
+                {app.cartoes.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.ativo ? '' : ' (inativo)'}</option>)}
+              </select>
+            </label>
+            <label>Fatura de
+              <input type="month" value={faturaMes} onChange={(e) => trocarFatura(e.target.value)} />
+            </label>
+          </div>
+        )}
+        {edCartao && status === 'concluido' && (
+          <label>Pago com a conta
+            <select value={conta} onChange={(e) => setConta(e.target.value)}>
+              <option value="">Não informar</option>
+              {contasAtivas.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </label>
+        )}
+
+        {edCartao ? null : (ehCartao && !ed) ? (
           <label>Cartão
             <select value={cartao} onChange={(e) => setCartao(e.target.value)}>
               {cartoesAtivos.length === 0 && <option value="">Nenhum cartão cadastrado</option>}
               {cartoesAtivos.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.dono_id ? ` · ${app.nomeMembro(c.dono_id)}` : ''}</option>)}
             </select>
           </label>
-        ) : !(ed?.cartao_id && ed.status !== 'concluido') && (
+        ) : (
           <label>{tipo === 'receita' ? 'Entra na conta' : 'Sai da conta'}
             <select value={conta} onChange={(e) => setConta(e.target.value)}>
               <option value="">Não informar</option>
@@ -188,6 +264,9 @@ export default function NovoLancamento({ tipoInicial = 'despesa', dataInicial, e
 
         {ed && <label>Observação<input value={obs} onChange={(e) => setObs(e.target.value)} /></label>}
         {ed?.parcela_total > 1 && <p className="dica">Parcela {ed.parcela_num} de {ed.parcela_total}{ed.cartao_id ? ` · ${app.cartao(ed.cartao_id)?.nome || 'cartão'}` : ''}</p>}
+        {ehParcelado && (
+          <label className="check"><input type="checkbox" checked={todas} onChange={(e) => setTodas(e.target.checked)} /> Aplicar descrição, categoria, responsável{edCartao ? ', cartão' : ''} e valor a todas as {ed.parcela_total} parcelas</label>
+        )}
 
         {erro && <div className="aviso erro">{erro}</div>}
 

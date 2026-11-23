@@ -83,6 +83,7 @@ function Faturas({ cartao }) {
                     ))}
                   </ul>
                   {!paga && <button className="btn primario" onClick={() => setPagar(f)}>Pagar fatura ({brl(f.aberto)})</button>}
+                  {f.total - f.aberto > 0 && <DesfazerPagamento cartao={cartao} fatura={f} />}
                 </div>
               )}
             </li>
@@ -92,6 +93,26 @@ function Faturas({ cartao }) {
       {pagar && <PagarFatura cartao={cartao} fatura={pagar} fechar={() => setPagar(null)} />}
       {editar && <NovoLancamento editar={editar} fechar={() => setEditar(null)} />}
     </section>
+  )
+}
+
+function DesfazerPagamento({ cartao, fatura }) {
+  const app = useApp()
+  const [confirma, setConfirma] = useState(false)
+  async function desfazer() {
+    const { error } = await supabase.from('lancamentos').update({ status: 'pendente', conta_id: null })
+      .eq('cartao_id', cartao.id).eq('fatura_ref', fatura.mes + '-01').eq('status', 'concluido')
+    if (error) return app.avisar(erroMsg(error), 'erro')
+    await app.carregar()
+    app.avisar('Pagamento desfeito')
+    setConfirma(false)
+  }
+  if (!confirma) return <button className="link" onClick={() => setConfirma(true)}>Desfazer pagamento desta fatura</button>
+  return (
+    <div className="confirma">
+      <p>Voltar todos os itens pagos desta fatura para Pendente? O valor volta para o saldo da conta.</p>
+      <div className="acoes"><button className="btn" onClick={() => setConfirma(false)}>Não</button><button className="btn perigo" onClick={desfazer}>Desfazer</button></div>
+    </div>
   )
 }
 
