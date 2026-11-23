@@ -10,6 +10,7 @@ export default function Cartoes() {
   const app = useApp()
   const [form, setForm] = useState(null)
   const [selId, setSelId] = useState(null)
+  const [novoNo, setNovoNo] = useState(null) // id do cartão para lançar
   const visiveis = app.cartoes.filter((c) => app.visao === 'casal' || !c.dono_id || c.dono_id === app.visao)
   const sel = visiveis.find((c) => c.id === selId) || visiveis[0]
 
@@ -35,19 +36,21 @@ export default function Cartoes() {
                 <div className="barra claro"><i style={{ width: pct + '%' }} /></div>
                 <div className="entre"><small>Usado {brl(uso)}</small><small>Livre {brl(Math.max(0, c.limite - uso))}</small></div>
                 <small>Fecha dia {c.dia_fechamento} · vence dia {c.dia_vencimento}</small>
+                {c.ativo && <button className="mini lancar" onClick={(e) => { e.stopPropagation(); setNovoNo(c.id) }}>+ Lançar neste cartão</button>}
               </div>
             )
           })}
         </div>
       )}
 
-      {sel && <Faturas cartao={sel} />}
+      {sel && <Faturas cartao={sel} lancar={() => setNovoNo(sel.id)} />}
+      {novoNo && <NovoLancamento tipoInicial="despesa" cartaoInicial={novoNo} fechar={() => setNovoNo(null)} />}
       {form && <FormCartao cartao={form} fechar={() => setForm(null)} />}
     </div>
   )
 }
 
-function Faturas({ cartao }) {
+function Faturas({ cartao, lancar }) {
   const app = useApp()
   const faturas = faturasDoCartao(cartao, app.lancamentos)
   const atual = mesISO()
@@ -55,11 +58,11 @@ function Faturas({ cartao }) {
   const [pagar, setPagar] = useState(null)
   const [editar, setEditar] = useState(null)
 
-  if (faturas.length === 0) return <div className="card vazio">Nenhuma compra em {cartao.nome} ainda. Use “+ Novo lançamento” → Despesa → Cartão de crédito.</div>
+  if (faturas.length === 0) return <div className="card vazio">Nenhuma compra em {cartao.nome} ainda. <button className="btn primario" onClick={lancar}>+ Lançar neste cartão</button></div>
 
   return (
     <section className="card">
-      <h3>Faturas · {cartao.nome}</h3>
+      <div className="entre"><h3>Faturas · {cartao.nome}</h3><button className="btn primario" onClick={lancar}>+ Lançar neste cartão</button></div>
       <ul className="lista faturas">
         {faturas.map((f) => {
           const paga = f.aberto === 0
