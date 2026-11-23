@@ -111,7 +111,28 @@ main{position:relative;z-index:1;max-width:980px;margin:0 auto;padding:16px 12px
 .carrinho b{color:var(--verm)}
 footer{position:relative;z-index:1;text-align:center;color:#ffd9dc;font-size:12.5px;padding:16px}
 .toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--verde);color:#fff;padding:10px 16px;border-radius:12px;font-weight:600;z-index:60}
-@media (max-width:560px){.hero h1{font-size:34px}.stats b{font-size:19px}.grid{grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}.abas button{padding:8px 11px;font-size:13.5px}}
+.filtros.sub button{font-size:13px;padding:6px 12px}
+.kp{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.kp>div{background:#fff;border:1px solid var(--borda);border-radius:14px;padding:12px}
+.kp small{display:block;color:var(--txt2);font-weight:600;font-size:12px}
+.kp b{display:block;font-size:21px;margin-top:2px;font-variant-numeric:tabular-nums;color:var(--verde)}
+.kp span{display:block;color:var(--txt2);font-size:11.5px;margin-top:2px}
+.kp .dest{background:linear-gradient(135deg,var(--verde),var(--verde2));border:none}
+.kp .dest small,.kp .dest span{color:#d6f0de}.kp .dest b{color:#fff;font-size:24px}
+.mini{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.mini>div{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:8px 10px}
+.mini small{display:block;color:var(--txt2);font-size:11.5px;font-weight:600}.mini b{font-size:17px;color:var(--verde)}
+.tab{overflow-x:auto;border:1px solid var(--borda);border-radius:14px;background:#fff}
+.tab table{width:100%;border-collapse:collapse;font-size:13.5px}
+.tab th{background:#fbefe4;color:var(--txt2);font-size:12px;text-align:left;padding:8px 10px;white-space:nowrap}
+.tab td{padding:8px 10px;border-top:1px solid #f5e6da;vertical-align:top}
+.tab td small{color:var(--txt2)}
+.tab tfoot td{font-weight:800;background:#fff8ef;border-top:2px solid var(--borda)}
+.tab .r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.pos{color:var(--verde2)}.neg{color:var(--verm)!important}.pend{color:#a86a12;font-weight:700}.ok{color:var(--verde2);font-weight:700;white-space:nowrap}
+.fm{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eee;color:#555}
+.fm.pix{background:#e0ecff;color:#1d4ed8}.fm.dinheiro{background:#e3f4e8;color:#166534}
+@media (max-width:560px){.abas{flex-wrap:wrap;gap:4px}.hero h1{font-size:34px}.stats b{font-size:19px}.grid{grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}.abas button{padding:8px 11px;font-size:13.5px}}
 </style>
 </head>
 <body>
@@ -128,6 +149,7 @@ footer{position:relative;z-index:1;text-align:center;color:#ffd9dc;font-size:12.
   <button data-aba="rifa" class="on">🎟️ Rifa</button>
   <button data-aba="avisos">📢 Avisos<span class="badge oculto" id="n-avisos"></span></button>
   <button data-aba="fotos">📸 Fotos<span class="badge oculto" id="n-fotos"></span></button>
+  <button data-aba="contas" id="aba-contas" class="oculto">💰 Contas</button>
 </nav>
 
 <main id="conteudo"><div class="card vazio">Carregando…</div></main>
@@ -153,7 +175,7 @@ const dataBR = (d) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '');
 const n2 = (n) => String(n).padStart(2, '0');
 const url = (p) => (p ? sb.storage.from('natal-publico').getPublicUrl(p).data.publicUrl : '');
 const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-let D = null, aba = (['rifa', 'avisos', 'fotos'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'rifa'), filtro = 'todos', busca = '';
+let D = null, aba = (['rifa', 'avisos', 'fotos', 'contas'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'rifa'), filtro = 'todos', busca = '';
 const sel = new Set();
 
 $('#luzes').innerHTML = '<i></i>'.repeat(14);
@@ -166,7 +188,7 @@ window.irAba = irAba;
 
 async function carregar() {
   if (!slug) { $('#conteudo').innerHTML = '<div class="card vazio">Link incompleto. Peça o link para a organização.</div>'; return; }
-  const { data, error } = await sb.rpc('natal_publico', { p_slug: slug });
+  const [{ data, error }] = await Promise.all([sb.rpc('natal_publico', { p_slug: slug }), carregarContas().catch(() => {})]);
   if (error) { if (!D) $('#conteudo').innerHTML = '<div class="card vazio">Não foi possível carregar agora. Tente novamente em instantes.</div>'; return; }
   if (!data) { $('#conteudo').innerHTML = '<div class="card vazio">Esta página não está disponível (link desativado ou incorreto).</div>'; return; }
   D = data;
@@ -193,6 +215,7 @@ function render() {
   document.querySelectorAll('#abas button').forEach((b) => b.classList.toggle('on', b.dataset.aba === aba));
   if (aba === 'avisos') return renderAvisos();
   if (aba === 'fotos') return renderFotos();
+  if (aba === 'contas') return renderContas();
   renderRifa();
 }
 
@@ -226,6 +249,66 @@ function renderRifa() {
   document.querySelectorAll('.n.d').forEach((el) => { el.onclick = () => { const k = +el.dataset.n; sel.has(k) ? sel.delete(k) : sel.add(k); el.classList.toggle('sel'); carrinho(); }; });
   const cp = $('#copiar-pix'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(D.pix_chave); toast('Chave PIX copiada'); } catch (e) { prompt('Copie a chave PIX:', D.pix_chave); } };
   carrinho();
+}
+
+// ---------- Portal de transparência (prestação de contas, somente leitura) ----------
+let T = null, subContas = 'resumo';
+const FORMA = { dinheiro: 'Dinheiro', pix: 'PIX', cartao: 'Cartão', outro: 'Outro' };
+async function carregarContas() {
+  const { data, error } = await sb.rpc('natal_transparencia', { p_slug: slug });
+  if (error || !data) { T = null; $('#aba-contas').classList.add('oculto'); return; }
+  T = data; $('#aba-contas').classList.remove('oculto');
+}
+function renderContas() {
+  carrinho();
+  if (!T) { $('#conteudo').innerHTML = '<div class="card vazio">A prestação de contas ainda não está disponível.</div>'; return; }
+  const t = T.totais || {};
+  const cor = (v) => (Number(v) < 0 ? ' style="color:#b3141f"' : '');
+  const bl = T.blocos || [];
+  const tb = { valor: 0, recebido: 0, falta: 0, pix: 0, dinheiro: 0, vendidos: 0 };
+  bl.forEach((b) => { for (const k in tb) tb[k] += Number(b[k]) || 0; });
+  const ent = T.entradas || [], desp = T.despesas || [];
+  const hist = [...ent.map((e) => ({ ...e, t: 'e' })), ...desp.filter((d) => d.situacao === 'pago').map((d) => ({ ...d, t: 's' }))]
+    .sort((a, b) => (a.data || '').localeCompare(b.data || '') || (a.t === 'e' ? -1 : 1));
+  let sg = 0; hist.forEach((h) => { sg += h.t === 'e' ? Number(h.valor) : -Number(h.valor); h.saldo = sg; });
+  const subs = [['resumo', '📊 Resumo'], ['entradas', `⬇️ Entradas (${ent.length})`], ['despesas', `⬆️ Despesas (${desp.length})`], ['historico', '📜 Histórico'], ['rifa', `🎟️ Blocos da rifa (${bl.length})`]];
+  let corpo = '';
+  if (subContas === 'entradas') corpo = ent.length ? `<div class="tab"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Forma</th><th class="r">Valor</th></tr></thead><tbody>
+      ${ent.map((e) => `<tr><td>${dataBR(e.data)}</td><td>${esc(e.descricao)}</td><td>${esc(e.categoria)}</td><td><span class="fm ${e.forma}">${esc(FORMA[e.forma] || e.forma)}</span></td><td class="r"><b class="pos">${brl(e.valor)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="4">Total de entradas</td><td class="r">${brl(t.arrecadado)}</td></tr></tfoot></table></div>` : '<p class="vazio">Nenhuma entrada registrada ainda.</p>';
+  else if (subContas === 'despesas') corpo = desp.length ? `<div class="tab"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Forma</th><th>Situação</th><th class="r">Valor</th></tr></thead><tbody>
+      ${desp.map((d) => `<tr><td>${dataBR(d.data)}</td><td>${esc(d.descricao)}</td><td>${esc(d.categoria)}<br><small>${d.tipo === 'fixa' ? 'fixa' : 'variável'}</small></td><td><span class="fm ${d.forma}">${esc(FORMA[d.forma] || d.forma)}</span></td><td>${d.situacao === 'pago' ? 'Paga' : '<span class="pend">A pagar</span>'}</td><td class="r"><b class="neg">${brl(d.valor)}</b></td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="5">Despesas pagas${t.despesas_pendentes ? ` · ${brl(t.despesas_pendentes)} a pagar` : ''}</td><td class="r">${brl(t.despesas)}</td></tr></tfoot></table></div>` : '<p class="vazio">Nenhuma despesa registrada ainda.</p>';
+  else if (subContas === 'historico') corpo = hist.length ? `<div class="tab"><table><thead><tr><th>Data</th><th>Movimentação</th><th>Forma</th><th class="r">Entrada</th><th class="r">Saída</th><th class="r">Saldo</th></tr></thead><tbody>
+      ${[...hist].reverse().map((h) => `<tr><td>${dataBR(h.data)}</td><td>${esc(h.descricao)}<br><small>${esc(h.categoria)}</small></td><td><span class="fm ${h.forma}">${esc(FORMA[h.forma] || h.forma)}</span></td>
+        <td class="r">${h.t === 'e' ? `<b class="pos">${brl(h.valor)}</b>` : ''}</td><td class="r">${h.t === 's' ? `<b class="neg">${brl(h.valor)}</b>` : ''}</td><td class="r"${cor(h.saldo)}>${brl(h.saldo)}</td></tr>`).join('')}</tbody></table></div>
+      <p class="dica" style="margin-top:8px">Mostra tudo o que entrou e todas as despesas já pagas, da mais recente para a mais antiga, com o saldo acumulado.</p>` : '<p class="vazio">Nenhuma movimentação ainda.</p>';
+  else if (subContas === 'rifa') corpo = bl.length ? `
+      <div class="mini"><div><small>Recebido da rifa em dinheiro</small><b>${brl(tb.dinheiro)}</b></div><div><small>Recebido da rifa via PIX</small><b>${brl(tb.pix)}</b></div><div><small>Total recebido</small><b>${brl(tb.recebido)}</b></div><div><small>Falta acertar</small><b class="neg">${brl(tb.falta)}</b></div></div>
+      <div class="tab"><table><thead><tr><th>Bloco</th><th>Responsável</th><th>Numeração</th><th class="r">Vendidos</th><th class="r">Valor do bloco</th><th class="r">Recebido</th><th class="r">Falta acertar</th></tr></thead><tbody>
+      ${bl.map((b) => `<tr><td><b>${esc(b.controle ?? String(b.numero).padStart(3, '0'))}</b></td><td>${esc(b.responsavel)}</td><td style="white-space:nowrap">${b.ini != null ? `${String(b.ini).padStart(4, '0')} – ${String(b.fim).padStart(4, '0')}` : '—'}</td><td class="r">${b.vendidos}</td><td class="r">${brl(b.valor)}</td>
+        <td class="r"><b class="pos">${brl(b.recebido)}</b>${b.recebido ? `<br><small>${b.pix ? 'PIX ' + brl(b.pix) : ''}${b.pix && b.dinheiro ? ' · ' : ''}${b.dinheiro ? 'dinheiro ' + brl(b.dinheiro) : ''}</small>` : ''}</td>
+        <td class="r">${Number(b.falta) > 0 ? `<b class="neg">${brl(b.falta)}</b>` : '<span class="ok">✔ acertado</span>'}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3">${bl.length} bloco(s)</td><td class="r">${tb.vendidos}</td><td class="r">${brl(tb.valor)}</td><td class="r">${brl(tb.recebido)}</td><td class="r">${brl(tb.falta)}</td></tr></tfoot></table></div>
+      <p class="dica" style="margin-top:8px">Só aparecem o nome de quem pegou o bloco e os valores. Telefones, CPF, documentos e dados bancários nunca são exibidos.</p>` : '<p class="vazio">Nenhum bloco entregue ainda.</p>';
+  else corpo = `<div class="kp">
+      <div class="dest"><small>Saldo geral</small><b>${brl(t.saldo)}</b><span>tudo o que entrou − despesas pagas</span></div>
+      <div><small>Total arrecadado</small><b>${brl(t.arrecadado)}</b><span>rifa ${brl(t.rifa)} + outras entradas</span></div>
+      <div><small>Recebido em dinheiro</small><b>${brl(t.dinheiro)}</b></div>
+      <div><small>Recebido via PIX</small><b>${brl(t.pix)}</b></div>
+      <div><small>Total de despesas pagas</small><b class="neg">${brl(t.despesas)}</b>${t.despesas_pendentes ? `<span>+ ${brl(t.despesas_pendentes)} a pagar</span>` : ''}</div>
+      <div><small>Despesas pagas em dinheiro</small><b class="neg">${brl(t.despesas_dinheiro)}</b></div>
+      <div><small>Despesas pagas via PIX</small><b class="neg">${brl(t.despesas_pix)}</b></div>
+      <div><small>Saldo em dinheiro</small><b${cor(t.saldo_dinheiro)}>${brl(t.saldo_dinheiro)}</b></div>
+      <div><small>Saldo no PIX</small><b${cor(t.saldo_pix)}>${brl(t.saldo_pix)}</b></div>
+    </div>`;
+  $('#conteudo').innerHTML = `
+    <div class="card faixa"><h2>💰 Prestação de contas</h2>
+      <p class="dica" style="margin:-4px 0 12px">Transparência total: veja quanto foi arrecadado, como foi gasto e o acerto de cada bloco da rifa. Atualizado automaticamente${T.atualizado_em ? ' · ' + new Date(T.atualizado_em).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}.</p>
+      <div class="filtros sub">${subs.map(([k, l]) => `<button data-sub="${k}" class="${subContas === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+      ${corpo}
+    </div>`;
+  document.querySelectorAll('[data-sub]').forEach((b) => { b.onclick = () => { subContas = b.dataset.sub; renderContas(); }; });
 }
 
 function renderAvisos() {

@@ -15,6 +15,10 @@ const CATEGORIAS_DESPESA = ['Balas', 'Pirulitos', 'Chicletes', 'Saquinhos', 'Com
 const CATEGORIAS_PRODUTO = ['Balas', 'Pirulitos', 'Chicletes', 'Saquinhos', 'Brinquedos', 'Decoração', 'Outros'];
 const FORMAS_DESPESA = [['dinheiro', 'Dinheiro'], ['pix', 'PIX'], ['cartao', 'Cartão'], ['outro', 'Outro']];
 const FORMAS_REC = [['dinheiro', 'Dinheiro'], ['pix', 'PIX']];
+const CATEGORIAS_ENTRADA = ['Doação', 'Patrocínio', 'Evento', 'Venda', 'Rifa extra', 'Outras entradas'];
+const TIPOS_CUSTO = [['variavel', 'Variável'], ['fixa', 'Fixa']];
+const TIPOS_CHAT = { mensagem: { l: 'Mensagem', ic: '💬', cor: 'b-cinza' }, comunicado: { l: 'Comunicado importante', ic: '📢', cor: 'b-verm' }, decisao: { l: 'Decisão da equipe', ic: '✅', cor: 'b-verde' } };
+const NOME_FORMA = { dinheiro: 'Dinheiro', pix: 'PIX', cartao: 'Cartão', outro: 'Outro' };
 const ST_NUM = { disponivel: 'Disponível', reservado: 'Reservado', vendido: 'Vendido', pago: 'Pago', pendente: 'Pendente', cancelado: 'Cancelado' };
 const ST_NUM_COR = { disponivel: 'b-cinza', reservado: 'b-azul', vendido: 'b-ouro', pago: 'b-verde', pendente: 'b-verm', cancelado: 'b-cinza' };
 const ST_BLOQ = { disponivel: 'Disponível', entregue: 'Entregue', em_andamento: 'Em andamento', devolvido: 'Devolvido', finalizado: 'Finalizado' };
@@ -94,6 +98,20 @@ const pode = (area) => {
   return false;
 };
 const podeConfirmar = () => PAPEL === 'admin' || PAPEL === 'financeiro';
+// O script 006 (chat/categorias/transparência) já rodou no banco?
+const tem006 = () => S.chatOk !== false;
+const podeChat = () => S.chatOk !== false && (PAPEL === 'admin' || S.membroPorUser?.[CLAIMS.sub]?.chat !== false);
+// Nome de quem fez o lançamento (criado_por → membro da equipe)
+const lancadoPor = (uid) => { const m = S.membroPorUser?.[uid]; return m ? (m.nome || (m.email || '').split('@')[0]) : ''; };
+const catsDespesa = () => [...new Set([...CATEGORIAS_DESPESA, ...(S.categorias || []).filter((c) => c.tipo === 'despesa').map((c) => c.nome), ...S.despesas.map((d) => d.categoria).filter(Boolean)])];
+const catsEntrada = () => [...new Set([...CATEGORIAS_ENTRADA, ...(S.categorias || []).filter((c) => c.tipo === 'entrada').map((c) => c.nome), ...S.receitas.map((r) => r.categoria).filter(Boolean)])];
+async function garantirCategoria(tipo, nome) {
+  if (!nome) return;
+  const lista = tipo === 'despesa' ? catsDespesa() : catsEntrada();
+  if (lista.some((c) => c.toLowerCase() === nome.toLowerCase())) return;
+  await sb.from('natal_categorias').insert({ tipo, nome }); // se já existir, o banco ignora (índice único)
+}
+const catReceita = (r) => r.categoria || (r.tipo === 'doacao' ? 'Doação' : 'Outras entradas');
 
 // ---------- Autenticação ----------
 let modoLogin = 'entrar';
@@ -231,8 +249,15 @@ async function carregar() {
     todos('natal_fotos', 'criado_em').catch(() => []),
     todos('natal_avisos', 'criado_em').catch(() => []),
   ]);
+  const [membros, categorias, chat] = await Promise.all([
+    sb.from('natal_membros').select('id,user_id,nome,email,papel,ativo,chat').then((r) => (r.error ? sb.from('natal_membros').select('id,user_id,nome,email,papel,ativo').then((r2) => r2.data || []) : r.data || [])),
+    todos('natal_categorias', 'nome').catch(() => []),
+    carregarChat().catch(() => null),
+  ]);
   S = { carregado: true, grupo: grupo || {}, config: config || { nome_evento: 'Carretinha de Natal', ano: new Date().getFullYear(), numeros_por_bloquinho: 20, valor_numero: 6.25, estoque_minimo_padrao: 10 },
-    pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato, fotos, avisos, semConfig: !config };
+    pessoas, despesas, produtos, premios, bloquinhos, numeros, pagamentos, entregas, receitas, agenda, escala, extrato, fotos, avisos, semConfig: !config,
+    membros, categorias, chat: chat || [], chatOk: chat !== null };
+  S.membroPorUser = Object.fromEntries(membros.map((m) => [m.user_id, m]));
   S.bloqPorId = Object.fromEntries(bloquinhos.map((b) => [b.id, b]));
   S.numPorId = Object.fromEntries(numeros.map((n) => [n.id, n]));
   S.pessoaPorId = Object.fromEntries(pessoas.map((p) => [p.id, p]));
@@ -241,6 +266,7 @@ async function carregar() {
   S.pagsPorNum = {};
   for (const p of pagamentos) if (p.numero_id) (S.pagsPorNum[p.numero_id] ||= []).push(p);
   $('#marca-ano').textContent = (S.config.nome_evento && S.config.nome_evento !== 'Carretinha de Natal' ? S.config.nome_evento + ' · ' : '') + 'Edição ' + S.config.ano;
+  if (S.chatOk) ligarRealtimeChat();
   $('#topo-sync').textContent = '● Atualizado ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
@@ -310,7 +336,31 @@ function totais(de, ate) {
     doacoes, outras, recebidoTotal, receitasPendentes: soma(recPend, 'valor'),
     despTotal: despPagas + despPend, despPagas, despPend, porCat,
     saldo: recebidoTotal - despPagas,
+    despPagasDinheiro: soma(desp.filter((d) => d.situacao === 'pago' && d.forma_pagamento === 'dinheiro'), 'valor_total'),
+    despPagasPix: soma(desp.filter((d) => d.situacao === 'pago' && d.forma_pagamento === 'pix'), 'valor_total'),
+    despPagasOutras: soma(desp.filter((d) => d.situacao === 'pago' && !['dinheiro', 'pix'].includes(d.forma_pagamento)), 'valor_total'),
+    despFixas: soma(desp.filter((d) => d.tipo_custo === 'fixa'), 'valor_total'),
+    despVariaveis: soma(desp.filter((d) => d.tipo_custo !== 'fixa'), 'valor_total'),
   };
+}
+// Saldos separados: o que entrou em cada forma menos o que saiu na mesma forma
+function caixaDinPix(t) {
+  t.saldoDinheiro = t.recebidoDinheiro - t.despPagasDinheiro;
+  t.saldoPix = t.recebidoPix - t.despPagasPix;
+  return t;
+}
+function cardDinPix(t) {
+  caixaDinPix(t);
+  return `<div class="card"><div class="entre"><h3 style="margin:0">💵 Dinheiro × PIX</h3><button class="btn peq" onclick="irPara('caixa')">Ver movimentações</button></div>
+    <div class="kpis" style="margin-top:12px">
+      <div class="kpi"><span>Recebido em dinheiro</span><b>${brl(t.recebidoDinheiro)}</b><small>rifas + entradas</small></div>
+      <div class="kpi a"><span>Recebido via PIX</span><b>${brl(t.recebidoPix)}</b><small>${t.rifaAguardando ? brl(t.rifaAguardando) + ' aguardando conferência (fora do total)' : 'conferido'}</small></div>
+      <div class="kpi v"><span>Despesas pagas em dinheiro</span><b>${brl(t.despPagasDinheiro)}</b></div>
+      <div class="kpi v"><span>Despesas pagas via PIX</span><b>${brl(t.despPagasPix)}</b>${t.despPagasOutras ? `<small>+ ${brl(t.despPagasOutras)} em cartão/outros</small>` : ''}</div>
+      <div class="kpi o"><span>Saldo em dinheiro</span><b style="color:${t.saldoDinheiro < 0 ? 'var(--vermelho)' : 'inherit'}">${brl(t.saldoDinheiro)}</b><small>recebido − pago em dinheiro</small></div>
+      <div class="kpi a"><span>Saldo no PIX</span><b style="color:${t.saldoPix < 0 ? 'var(--vermelho)' : 'inherit'}">${brl(t.saldoPix)}</b><small>recebido − pago via PIX</small></div>
+      <div class="kpi destaque"><span>Saldo geral</span><b>${brl(t.saldo)}</b><small>tudo o que entrou − despesas pagas</small></div>
+    </div></div>`;
 }
 function estoqueMin(p) { return p.estoque_minimo !== null && p.estoque_minimo !== undefined ? Number(p.estoque_minimo) : Number(S.config.estoque_minimo_padrao || 0); }
 function alertas() {
@@ -457,12 +507,14 @@ const nomesPessoas = () => S.pessoas.filter((p) => p.ativo).map((p) => p.nome);
 // ---------- Navegação ----------
 const SECOES = [
   { id: 'dashboard', n: '📊', l: 'Dashboard Geral', visivel: () => true, render: rDashboard },
+  { id: 'chat', n: '💬', l: 'Comunicação da equipe', visivel: () => podeChat(), render: rChat },
   { id: 'despesas', n: '🧾', l: 'Controle de Despesas', visivel: () => true, render: rDespesas },
   { id: 'produtos', n: '📦', l: 'Compras e Produtos', visivel: () => true, render: rProdutos },
   { id: 'premios', n: '🎁', l: 'Controle de Prêmios', visivel: () => true, render: rPremios },
   { id: 'rifas', n: '🎟️', l: 'Controle de Rifas', visivel: () => true, render: rRifas },
   { id: 'bloquinhos', n: '📒', l: 'Bloquinhos e Acertos', visivel: () => true, render: rBloquinhos },
   { id: 'recebimentos', n: '💰', l: 'Controle de Recebimentos', visivel: () => true, render: rRecebimentos },
+  { id: 'caixa', n: '💵', l: 'Caixa: Dinheiro e PIX', visivel: () => true, render: rCaixa },
   { id: 'pessoas', n: '👥', l: 'Pessoas e Responsáveis', visivel: () => true, render: rPessoas },
   { id: 'programacao', n: '🗓️', l: 'Programação e Escala', visivel: () => true, render: rProgramacao },
   { id: 'divulgacao', n: '📣', l: 'Divulgação (página pública)', visivel: () => ['admin', 'financeiro'].includes(PAPEL), render: rDivulgacao },
@@ -472,7 +524,7 @@ const SECOES = [
 function montarMenu() {
   const nAlertas = alertas().length;
   $('#menu').innerHTML = SECOES.filter((s) => s.visivel()).map((s) =>
-    `<button class="${SECAO === s.id ? 'ativo' : ''}" onclick="irPara('${s.id}')"><span class="n">${s.n}</span>${s.l}${s.id === 'dashboard' && nAlertas ? `<span class="cont">${nAlertas}</span>` : ''}</button>`).join('');
+    `<button class="${SECAO === s.id ? 'ativo' : ''}" onclick="irPara('${s.id}')"><span class="n">${s.n}</span>${s.l}${s.id === 'dashboard' && nAlertas ? `<span class="cont">${nAlertas}</span>` : ''}${s.id === 'chat' && naoLidas() ? `<span class="cont">${naoLidas()}</span>` : ''}</button>`).join('');
 }
 function irPara(id, filtros) {
   SECAO = id;
@@ -504,6 +556,7 @@ function rDashboard() {
     ${primeirosPassos()}
     ${S.grupo.slug && S.grupo.publico_ativo ? `<div class="card"><h3>📣 Divulgue a rifa</h3>${caixaLinkPublico()}</div>` : ''}
     ${al.length ? `<div class="card"><h3>🔔 Alertas automáticos</h3><div class="alertas">${al.map((a, i) => `<div class="alerta${a.grave ? ' grave' : ''}" data-al="${i}"><span class="ic">${a.ic}</span><div><b>${esc(a.t)}</b><small>${esc(a.d)}</small></div></div>`).join('')}</div></div>` : '<div class="ok-box">✅ Nenhum alerta no momento. Tudo em dia!</div>'}
+    ${cardDinPix(t)}
     <div class="kpis">
       <div class="kpi destaque"><span>Saldo financeiro atual</span><b>${brl(t.saldo)}</b><small>recebido − despesas pagas</small></div>
       <div class="kpi"><span>Total arrecadado com rifas</span><b>${brl(t.rifaVendido)}</b><small>${vend.length} número(s) vendido(s)</small></div>
@@ -593,7 +646,8 @@ function graficosDashboard(t) {
 // ============================================================
 const camposDespesa = () => [
   { k: 'descricao', l: 'Descrição da despesa', req: true, full: true },
-  { k: 'categoria', l: 'Categoria', t: 'select', op: CATEGORIAS_DESPESA.map((c) => [c, c]), req: true },
+  { k: 'categoria', l: 'Categoria', t: 'datalist', lista: catsDespesa(), req: true, dica: 'Escolha da lista ou digite uma nova categoria' },
+  { k: 'tipo_custo', l: 'Tipo de despesa', t: 'select', op: TIPOS_CUSTO },
   { k: 'produto', l: 'Produto ou serviço' },
   { k: 'quantidade', l: 'Quantidade', t: 'number', req: true },
   { k: 'valor_unitario', l: 'Valor unitário (R$)', t: 'money', req: true },
@@ -609,8 +663,8 @@ function formDespesa(d) {
   const totalPrev = '<p class="dica" id="desp-total" style="margin-top:4px"></p>';
   abrirForm({
     titulo: d ? 'Editar despesa' : 'Nova despesa', campos: camposDespesa(), extra: totalPrev,
-    valores: d || { quantidade: 1, data_compra: hoje(), situacao: 'pendente', forma_pagamento: 'dinheiro', categoria: 'Outros' },
-    salvar: (dados) => gravar('natal_despesas', d?.id, dados),
+    valores: d || { quantidade: 1, data_compra: hoje(), situacao: 'pendente', forma_pagamento: 'dinheiro', categoria: 'Outros', tipo_custo: 'variavel' },
+    salvar: async (dados) => { if (!tem006()) delete dados.tipo_custo; await garantirCategoria('despesa', dados.categoria).catch(() => {}); return gravar('natal_despesas', d?.id, dados); },
     excluir: d && pode('despesas') ? () => apagar('natal_despesas', d.id) : null,
     aoAbrir: (f) => {
       const atualiza = () => { f.querySelector('#desp-total').innerHTML = 'Valor total: <b>' + brl(num(f.querySelector('#f_quantidade').value) * num(f.querySelector('#f_valor_unitario').value)) + '</b>'; };
@@ -620,27 +674,29 @@ function formDespesa(d) {
   });
 }
 function rDespesas(completo) {
-  const f = (F.despesas = { cat: '', sit: '', forma: '', q: '', ...(F.despesas || {}) });
+  const f = (F.despesas = { cat: '', sit: '', forma: '', tipo: '', q: '', ...(F.despesas || {}) });
   if (completo) {
     $('#conteudo').innerHTML = `
       <div class="entre"><div class="filtros">
         <input type="search" id="fd-q" placeholder="Buscar descrição, produto, pessoa…" value="${esc(f.q)}">
-        <select id="fd-cat"><option value="">Todas as categorias</option>${CATEGORIAS_DESPESA.map((c) => `<option${f.cat === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        <select id="fd-cat"><option value="">Todas as categorias</option>${catsDespesa().map((c) => `<option${f.cat === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>
+        <select id="fd-tipo"><option value="">Fixas e variáveis</option>${TIPOS_CUSTO.map(([v, l]) => `<option value="${v}"${f.tipo === v ? ' selected' : ''}>${l === 'Fixa' ? 'Só fixas' : 'Só variáveis'}</option>`).join('')}</select>
         <select id="fd-sit"><option value="">Pagas e pendentes</option><option value="pago"${f.sit === 'pago' ? ' selected' : ''}>Pagas</option><option value="pendente"${f.sit === 'pendente' ? ' selected' : ''}>Pendentes</option></select>
         <select id="fd-forma"><option value="">Todas as formas</option>${FORMAS_DESPESA.map(([v, l]) => `<option value="${v}"${f.forma === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
-      </div>${pode('despesas') ? '<button class="btn prim" onclick="formDespesa()">+ Nova despesa</button>' : ''}</div>
+      </div><div class="filtros">${pode('despesas') ? '<button class="btn" onclick="gerenciarCategorias(\'despesa\')">🏷️ Categorias</button><button class="btn prim" onclick="formDespesa()">+ Nova despesa</button>' : ''}</div></div>
       <div id="desp-resumo"></div><div id="desp-lista"></div>`;
     $('#fd-q').oninput = (e) => { f.q = e.target.value; listaDespesas(); };
     $('#fd-cat').onchange = (e) => { f.cat = e.target.value; listaDespesas(); };
     $('#fd-sit').onchange = (e) => { f.sit = e.target.value; listaDespesas(); };
     $('#fd-forma').onchange = (e) => { f.forma = e.target.value; listaDespesas(); };
+    $('#fd-tipo').onchange = (e) => { f.tipo = e.target.value; listaDespesas(); };
   }
   listaDespesas();
 }
 window.formDespesa = formDespesa;
 function listaDespesas() {
   const f = F.despesas, q = f.q.toLowerCase();
-  const lista = S.despesas.filter((d) => (!f.cat || d.categoria === f.cat) && (!f.sit || d.situacao === f.sit) && (!f.forma || d.forma_pagamento === f.forma)
+  const lista = S.despesas.filter((d) => (!f.cat || d.categoria === f.cat) && (!f.sit || d.situacao === f.sit) && (!f.forma || d.forma_pagamento === f.forma) && (!f.tipo || (d.tipo_custo || 'variavel') === f.tipo)
     && (!q || [d.descricao, d.produto, d.quem_comprou, d.quem_pagou, d.observacoes].join(' ').toLowerCase().includes(q)))
     .sort((a, b) => (b.data_compra || '').localeCompare(a.data_compra || ''));
   const porCat = {};
@@ -650,17 +706,22 @@ function listaDespesas() {
       <div class="kpi v"><span>Total geral das despesas</span><b>${brl(total)}</b><small>${S.despesas.length} lançamento(s)</small></div>
       <div class="kpi"><span>Pagas</span><b>${brl(soma(S.despesas.filter((d) => d.situacao === 'pago'), 'valor_total'))}</b></div>
       <div class="kpi o"><span>Pendentes (a pagar)</span><b>${brl(soma(S.despesas.filter((d) => d.situacao === 'pendente'), 'valor_total'))}</b></div>
+      <div class="kpi"><span>Despesas fixas</span><b>${brl(soma(S.despesas.filter((d) => d.tipo_custo === 'fixa'), 'valor_total'))}</b></div>
+      <div class="kpi"><span>Despesas variáveis</span><b>${brl(soma(S.despesas.filter((d) => d.tipo_custo !== 'fixa'), 'valor_total'))}</b></div>
+      <div class="kpi v"><span>Pagas em dinheiro</span><b>${brl(soma(S.despesas.filter((d) => d.situacao === 'pago' && d.forma_pagamento === 'dinheiro'), 'valor_total'))}</b></div>
+      <div class="kpi a"><span>Pagas via PIX</span><b>${brl(soma(S.despesas.filter((d) => d.situacao === 'pago' && d.forma_pagamento === 'pix'), 'valor_total'))}</b></div>
     </div>
-    <div class="card" style="margin-top:12px"><h3>Total por categoria</h3><div class="cat-cards">${CATEGORIAS_DESPESA.filter((c) => porCat[c]).map((c) => `<div style="cursor:pointer" onclick="F.despesas.cat='${c}';rDespesas(true)"><small>${c}</small><b>${brl(porCat[c])}</b></div>`).join('') || '<p class="dica">Nenhuma despesa lançada.</p>'}</div></div>`;
+    <div class="card" style="margin-top:12px"><h3>Total por categoria</h3><div class="cat-cards">${catsDespesa().filter((c) => porCat[c]).map((c) => `<div style="cursor:pointer" onclick="F.despesas.cat=decodeURIComponent('${encodeURIComponent(c)}');rDespesas(true)"><small>${esc(c)}</small><b>${brl(porCat[c])}</b></div>`).join('') || '<p class="dica">Nenhuma despesa lançada.</p>'}</div></div>`;
   $('#desp-lista').innerHTML = lista.length ? `<div class="tabela-wrap"><table>
-    <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Produto/serviço</th><th class="num">Qtd</th><th class="num">Unitário</th><th class="num">Total</th><th>Comprou</th><th>Pagou</th><th>Forma</th><th>Situação</th><th></th></tr></thead>
+    <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Produto/serviço</th><th class="num">Qtd</th><th class="num">Unitário</th><th class="num">Total</th><th>Comprou</th><th>Pagou</th><th>Forma</th><th>Situação</th><th>Lançado por</th><th></th></tr></thead>
     <tbody>${lista.map((d) => `<tr style="cursor:pointer" onclick="formDespesa(S.despesas.find(x=>x.id==='${d.id}'))">
-      <td>${dataBR(d.data_compra)}</td><td><b>${esc(d.descricao)}</b>${d.observacoes ? `<br><small class="dica">${esc(d.observacoes)}</small>` : ''}</td><td>${esc(d.categoria)}</td><td>${esc(d.produto)}</td>
+      <td>${dataBR(d.data_compra)}</td><td><b>${esc(d.descricao)}</b>${d.observacoes ? `<br><small class="dica">${esc(d.observacoes)}</small>` : ''}</td><td>${esc(d.categoria)}<br><small class="dica">${d.tipo_custo === 'fixa' ? 'Fixa' : 'Variável'}</small></td><td>${esc(d.produto)}</td>
       <td class="num">${fmtQtd(d.quantidade)}</td><td class="num">${brl(d.valor_unitario)}</td><td class="num"><b>${brl(d.valor_total)}</b></td>
       <td>${esc(d.quem_comprou)}</td><td>${esc(d.quem_pagou)}</td><td>${esc((FORMAS_DESPESA.find((x) => x[0] === d.forma_pagamento) || [])[1])}</td>
       <td>${d.situacao === 'pago' ? '<span class="badge b-verde">Pago</span>' : `<span class="badge b-verm">Pendente</span>${pode('despesas') ? ` <button class="btn peq" onclick="event.stopPropagation();marcarDespesaPaga('${d.id}')">Pagar</button>` : ''}`}</td>
+      <td><small>${esc(lancadoPor(d.criado_por))}</small><br><small class="dica">${dataHoraBR(d.criado_em)}</small></td>
       <td class="acoes">${linkArq(d.comprovante_path)}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td colspan="6">${lista.length} despesa(s) filtrada(s)</td><td class="num">${brl(soma(lista, 'valor_total'))}</td><td colspan="5"></td></tr></tfoot></table></div>`
+    <tfoot><tr><td colspan="6">${lista.length} despesa(s) filtrada(s)</td><td class="num">${brl(soma(lista, 'valor_total'))}</td><td colspan="6"></td></tr></tfoot></table></div>`
     : '<div class="card vazio">Nenhuma despesa encontrada.</div>';
 }
 window.marcarDespesaPaga = async (id) => {
@@ -1189,7 +1250,7 @@ function montarAbaRec() {
   } else if (f.aba === 'entregas') {
     box.innerHTML = `<div class="entre" style="margin:12px 0"><p class="dica">Valores em dinheiro que os responsáveis entregaram ao caixa da Carretinha.</p>${pode('entregas') ? '<button class="btn prim" onclick="formEntrega()">+ Registrar entrega</button>' : ''}</div><div id="rec-lista"></div>`;
   } else {
-    box.innerHTML = `<div class="entre" style="margin:12px 0"><p class="dica">Doações em dinheiro e outras entradas (fora da rifa).</p>${pode('receitas') ? '<button class="btn prim" onclick="formReceita()">+ Nova entrada</button>' : ''}</div><div id="rec-lista"></div>`;
+    box.innerHTML = `<div class="entre" style="margin:12px 0"><p class="dica">Doações em dinheiro e outras entradas (fora da rifa).</p>${pode('receitas') ? '<div class="filtros"><button class="btn" onclick="gerenciarCategorias(\'entrada\')">🏷️ Categorias</button><button class="btn prim" onclick="formReceita()">+ Nova entrada</button></div>' : ''}</div><div id="rec-lista"></div>`;
   }
   listaAbaRec();
 }
@@ -1221,10 +1282,10 @@ function listaAbaRec() {
       <tfoot><tr><td colspan="2">Total entregue</td><td class="num">${brl(soma(lista, 'valor'))}</td><td colspan="4"></td></tr></tfoot></table></div>` : '<div class="card vazio">Nenhuma entrega registrada.</div>';
   } else {
     const lista = [...S.receitas].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
-    $('#rec-lista').innerHTML = lista.length ? `<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Doador / origem</th><th class="num">Valor</th><th>Forma</th><th>Recebido por</th><th>Situação</th><th></th></tr></thead><tbody>${lista.map((r) => `<tr style="cursor:pointer" onclick="formReceita(S.receitas.find(x=>x.id==='${r.id}'))">
-      <td>${dataBR(r.data)}</td><td>${r.tipo === 'doacao' ? 'Doação' : 'Outra entrada'}</td><td>${esc(r.descricao)}</td><td>${esc(r.doador)}</td><td class="num"><b>${brl(r.valor)}</b></td>
-      <td>${{ dinheiro: 'Dinheiro', pix: 'PIX', outro: 'Outro' }[r.forma]}</td><td>${esc(r.recebido_por)}</td><td>${r.situacao === 'recebido' ? '<span class="badge b-verde">Recebido</span>' : '<span class="badge b-ouro">Pendente</span>'}</td><td class="acoes">${linkArq(r.comprovante_path)}</td></tr>`).join('')}</tbody>
-      <tfoot><tr><td colspan="4">Total recebido</td><td class="num">${brl(soma(lista.filter((r) => r.situacao === 'recebido'), 'valor'))}</td><td colspan="4"></td></tr></tfoot></table></div>` : '<div class="card vazio">Nenhuma doação ou entrada registrada.</div>';
+    $('#rec-lista').innerHTML = lista.length ? `<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Doador / origem</th><th class="num">Valor</th><th>Forma</th><th>Recebido por</th><th>Situação</th><th>Lançado por</th><th></th></tr></thead><tbody>${lista.map((r) => `<tr style="cursor:pointer" onclick="formReceita(S.receitas.find(x=>x.id==='${r.id}'))">
+      <td>${dataBR(r.data)}</td><td>${esc(catReceita(r))}</td><td>${esc(r.descricao)}</td><td>${esc(r.doador)}</td><td class="num"><b>${brl(r.valor)}</b></td>
+      <td>${{ dinheiro: 'Dinheiro', pix: 'PIX', outro: 'Outro' }[r.forma]}</td><td>${esc(r.recebido_por)}</td><td>${r.situacao === 'recebido' ? '<span class="badge b-verde">Recebido</span>' : '<span class="badge b-ouro">Pendente</span>'}</td><td><small>${esc(lancadoPor(r.criado_por))}</small></td><td class="acoes">${linkArq(r.comprovante_path)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="4">Total recebido</td><td class="num">${brl(soma(lista.filter((r) => r.situacao === 'recebido'), 'valor'))}</td><td colspan="5"></td></tr></tfoot></table></div>` : '<div class="card vazio">Nenhuma doação ou entrada registrada.</div>';
   }
 }
 window.confirmarPag = async (id) => {
@@ -1258,6 +1319,7 @@ function formReceita(r) {
     titulo: r ? 'Editar entrada' : 'Nova doação / entrada',
     campos: [
       { k: 'tipo', l: 'Tipo', t: 'select', op: [['doacao', 'Doação em dinheiro'], ['outra', 'Outra entrada']] },
+      { k: 'categoria', l: 'Categoria', t: 'datalist', lista: catsEntrada(), dica: 'Escolha da lista ou digite uma nova' },
       { k: 'descricao', l: 'Descrição', req: true },
       { k: 'doador', l: 'Doador / origem' },
       { k: 'valor', l: 'Valor (R$)', t: 'money', req: true },
@@ -1270,7 +1332,7 @@ function formReceita(r) {
     ],
     valores: r || { tipo: 'doacao', data: hoje(), forma: 'dinheiro', situacao: 'recebido' },
     aoAbrir: (f) => { if (!pode('receitas')) f.querySelector('[data-salv]').classList.add('oculto'); },
-    salvar: (d) => { if (!(d.valor > 0)) throw new Error('Informe o valor.'); return gravar('natal_receitas', r?.id, d); },
+    salvar: async (d) => { if (!(d.valor > 0)) throw new Error('Informe o valor.'); if (!tem006()) delete d.categoria; else if (!d.categoria) d.categoria = d.tipo === 'doacao' ? 'Doação' : 'Outras entradas'; if (tem006()) await garantirCategoria('entrada', d.categoria).catch(() => {}); return gravar('natal_receitas', r?.id, d); },
     excluir: r && pode('receitas') ? () => apagar('natal_receitas', r.id) : null,
   });
 }
@@ -1480,7 +1542,8 @@ function caixaLinkPublico() {
   return `<div class="link-publico"><span>🔗</span><code>${esc(url)}</code>
     <button class="btn peq" onclick="copiarTexto('${esc(url)}')">Copiar link</button>
     <a class="btn peq" href="${esc(url)}" target="_blank" rel="noopener">Abrir</a>
-    <a class="btn peq ouro" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener">Enviar no WhatsApp</a></div>
+    <a class="btn peq ouro" href="https://wa.me/?text=${encodeURIComponent(texto)}" target="_blank" rel="noopener">Enviar no WhatsApp</a>
+    ${tem006() && S.grupo.transparencia_ativa !== false ? `<a class="btn peq" href="${esc(url)}#contas" target="_blank" rel="noopener">💰 Ver prestação de contas</a>` : ''}</div>
     ${S.grupo.publico_ativo ? '' : '<p class="erro-box" style="margin-top:8px">A página pública está DESATIVADA. Ative em Configurações → Divulgação.</p>'}`;
 }
 window.copiarTexto = async (t) => { try { await navigator.clipboard.writeText(t); toast('Link copiado'); } catch (e) { prompt('Copie o link:', t); } };
@@ -1517,7 +1580,8 @@ async function rConfig() {
         <li><b>Administrador geral</b> — tudo, inclusive configurações, convites e link público.</li>
         <li><b>Financeiro</b> — despesas, compras, prêmios, rifas, recebimentos e conferência de PIX.</li>
         <li><b>Responsável por bloquinhos</b> — bloquinhos, números e registro de pagamentos (PIX fica aguardando conferência).</li>
-        <li><b>Consulta</b> — apenas visualiza.</li></ul>
+        <li><b>Consulta</b> — apenas visualiza.</li>
+        <li><b>Chat</b> — na coluna “Chat” você libera ou bloqueia, pessoa por pessoa, o acesso à Comunicação da equipe.</li></ul>
       <div id="membros-lista"><p class="dica">Carregando…</p></div>
       <div class="secao-titulo">Convidar pessoa</div>
       <form class="filtros" id="form-convite">
@@ -1546,10 +1610,11 @@ async function rConfig() {
     sb.from('natal_convites').select('*').order('criado_em'),
   ]);
   if (e1 || e2) { $('#membros-lista').innerHTML = `<div class="erro-box">${esc(msgErro(e1 || e2))}</div>`; return; }
-  $('#membros-lista').innerHTML = `<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Papel</th><th>Situação</th><th></th></tr></thead><tbody>
+  $('#membros-lista').innerHTML = `<div class="tabela-wrap"><table><thead><tr><th>Pessoa</th><th>Papel</th><th>Situação</th>${tem006() ? '<th title="Acesso à Comunicação da equipe">Chat</th>' : ''}<th></th></tr></thead><tbody>
     ${(membros || []).map((m) => { const eu = m.user_id === CLAIMS.sub; return `<tr><td><b>${esc(m.nome || m.email)}</b>${eu ? ' <span class="badge b-ouro">você</span>' : ''}<br><small class="dica">${esc(m.email || '')}</small></td>
       <td>${eu ? PAPEIS[m.papel] : `<select data-papel="${m.id}" style="width:auto">${Object.entries(PAPEIS).map(([k, v]) => `<option value="${k}"${m.papel === k ? ' selected' : ''}>${v}</option>`).join('')}</select>`}</td>
       <td>${eu ? '<span class="badge b-verde">Ativo</span>' : `<button class="btn peq" data-ativo="${m.id}" data-v="${m.ativo}">${m.ativo ? '<span class="badge b-verde">Ativo</span>' : '<span class="badge b-cinza">Bloqueado</span>'}</button>`}</td>
+      ${tem006() ? `<td>${m.papel === 'admin' ? '<span class="badge b-verde">Sempre</span>' : `<button class="btn peq" data-chat="${m.id}" data-v="${m.chat !== false}">${m.chat !== false ? '<span class="badge b-verde">💬 Liberado</span>' : '<span class="badge b-cinza">Sem acesso</span>'}</button>`}</td>` : ''}
       <td class="acoes">${eu ? '' : `<button class="btn peq perigo" data-rem="${m.id}">Remover</button>`}</td></tr>`; }).join('')}
     </tbody></table></div>`;
   $('#convites-lista').innerHTML = (convites || []).length ? `<div class="secao-titulo">Convites aguardando a pessoa entrar</div><div class="tabela-wrap"><table><tbody>${convites.map((c2) => `<tr><td>${esc(c2.nome || '')} <small class="dica">${esc(c2.email)}</small></td><td>${PAPEIS[c2.papel]}</td><td class="acoes">
@@ -1565,6 +1630,7 @@ async function rConfig() {
   };
   document.querySelectorAll('[data-papel]').forEach((sl) => { sl.onchange = async () => { const { error } = await sb.from('natal_membros').update({ papel: sl.value }).eq('id', sl.dataset.papel); if (error) toast(msgErro(error), true); else toast('Papel atualizado'); }; });
   document.querySelectorAll('[data-ativo]').forEach((bt) => { bt.onclick = async () => { const { error } = await sb.from('natal_membros').update({ ativo: bt.dataset.v !== 'true' }).eq('id', bt.dataset.ativo); if (error) toast(msgErro(error), true); else rConfig(); }; });
+  document.querySelectorAll('[data-chat]').forEach((bt) => { bt.onclick = async () => { const { error } = await sb.from('natal_membros').update({ chat: bt.dataset.v !== 'true' }).eq('id', bt.dataset.chat); if (error) toast(msgErro(error), true); else { await recarregar(false); rConfig(); toast('Acesso ao chat atualizado'); } }; });
   document.querySelectorAll('[data-rem]').forEach((bt) => { bt.onclick = async () => { if (!(await confirmar('Remover esta pessoa da equipe? Ela perde o acesso à Carretinha.', 'Remover'))) return; const { error } = await sb.from('natal_membros').delete().eq('id', bt.dataset.rem); if (error) toast(msgErro(error), true); else { toast('Pessoa removida'); rConfig(); } }; });
   document.querySelectorAll('[data-remconv]').forEach((bt) => { bt.onclick = async () => { const { error } = await sb.from('natal_convites').delete().eq('id', bt.dataset.remconv); if (error) toast(msgErro(error), true); else { toast('Convite cancelado'); rConfig(); } }; });
 }
@@ -1612,6 +1678,7 @@ function rDivulgacao() {
             ${campoHTML({ k: 'pix_chave', l: 'Chave PIX' }, g.pix_chave)}
             ${campoHTML({ k: 'pix_nome', l: 'Nome do recebedor do PIX' }, g.pix_nome)}
             ${campoHTML({ k: 'publico_ativo', l: 'Página pública', t: 'select', op: [['true', 'Ativa'], ['false', 'Desativada']] }, String(g.publico_ativo))}
+            ${tem006() ? campoHTML({ k: 'transparencia_ativa', l: 'Prestação de contas na página pública', t: 'select', op: [['true', 'Mostrar (portal de transparência)'], ['false', 'Ocultar']] }, String(g.transparencia_ativa !== false)) : ''}
             ${campoHTML({ k: 'mostrar_iniciais', l: 'Nos números vendidos, mostrar', t: 'select', op: [['false', 'Só “vendido”'], ['true', 'Inicial do comprador (ex.: M.)']] }, String(g.mostrar_iniciais))}
             ${campoHTML({ k: 'mensagem_publica', l: 'Mensagem de boas-vindas', t: 'textarea', full: true }, g.mensagem_publica)}
           </div><div class="erro-box oculto" id="div-erro"></div>
@@ -1639,6 +1706,7 @@ function rDivulgacao() {
       const d = { nome: fd.elements.nome.value.trim() || 'Carretinha de Natal', instagram: insta || null, pix_chave: fd.elements.pix_chave.value.trim() || null, pix_nome: fd.elements.pix_nome.value.trim() || null,
         whatsapp: tel ? (tel.length <= 11 ? '55' + tel : tel) : null, publico_ativo: fd.elements.publico_ativo.value === 'true',
         mostrar_iniciais: fd.elements.mostrar_iniciais.value === 'true', mensagem_publica: fd.elements.mensagem_publica.value.trim() || null };
+      if (fd.elements.transparencia_ativa) d.transparencia_ativa = fd.elements.transparencia_ativa.value === 'true';
       const file = fd.elements.logo.files[0];
       if (file) d.logo_path = await enviarArquivo(file, 'logo', true);
       else if (fd.elements.logo_remover?.checked) d.logo_path = null;
@@ -2086,6 +2154,228 @@ async function importarPlano() {
     L('✖ Erro: ' + msgErro(e) + '\nO que já foi importado foi mantido; corrija e importe de novo (não duplica).');
     btn.disabled = false; btn.textContent = '📥 Tentar de novo';
   }
+}
+
+
+// ============================================================
+// COMUNICAÇÃO DA EQUIPE (chat interno — nunca aparece na página pública)
+// ============================================================
+async function carregarChat() {
+  const { data, error } = await sb.from('natal_chat').select('*').order('criado_em', { ascending: false }).limit(500);
+  if (error) throw error;
+  return (data || []).reverse();
+}
+const chaveVisto = () => 'natal-chat-visto-' + (CLAIMS.sub || '');
+function naoLidas() {
+  if (!podeChat() || SECAO === 'chat') return 0;
+  let v = ''; try { v = localStorage.getItem(chaveVisto()) || ''; } catch (e) { /* */ }
+  return (S.chat || []).filter((m) => m.criado_por !== CLAIMS.sub && m.criado_em > v).length;
+}
+function marcarVisto() {
+  const ult = (S.chat || [])[S.chat.length - 1]?.criado_em;
+  if (ult) try { localStorage.setItem(chaveVisto(), ult); } catch (e) { /* */ }
+}
+let canalChat = null;
+function ligarRealtimeChat() {
+  if (canalChat || !GRUPO || !tem006() || !podeChat()) return;
+  try {
+    canalChat = sb.channel('natal-chat-' + GRUPO)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'natal_chat', filter: 'grupo_id=eq.' + GRUPO }, () => atualizarChat())
+      .subscribe();
+  } catch (e) { canalChat = null; }
+}
+async function atualizarChat() {
+  try { S.chat = await carregarChat(); } catch (e) { return; }
+  if (SECAO === 'chat' && $('#chat-lista')) { listaChat(); marcarVisto(); }
+  montarMenu();
+}
+const urlsChat = new Map();
+async function preencherImagensChat() {
+  const imgs = [...document.querySelectorAll('img[data-path]')];
+  const faltam = [...new Set(imgs.map((i) => i.dataset.path).filter((p) => !urlsChat.has(p)))];
+  if (faltam.length) {
+    const { data } = await sb.storage.from(BUCKET).createSignedUrls(faltam, 3600);
+    (data || []).forEach((d, i) => { if (d.signedUrl) urlsChat.set(faltam[i], d.signedUrl); });
+  }
+  imgs.forEach((i) => { const u = urlsChat.get(i.dataset.path); if (u && i.src !== u) i.src = u; });
+}
+function rChat(completo) {
+  const f = (F.chat = { tipo: '', q: '', ...(F.chat || {}) });
+  if (!tem006()) { $('#conteudo').innerHTML = '<div class="card vazio">Falta rodar o script <b>006</b> no banco para liberar a comunicação da equipe.</div>'; return; }
+  if (completo || !$('#chat-lista')) {
+    $('#conteudo').innerHTML = `
+      <div class="card chat-card">
+        <div class="entre" style="gap:10px;flex-wrap:wrap">
+          <div class="abas" id="chat-abas" style="margin:0">
+            <button data-t="">💬 Conversa</button><button data-t="comunicado">📢 Comunicados</button><button data-t="decisao">✅ Decisões</button><button data-t="anexo">📎 Fotos e comprovantes</button>
+          </div>
+          <input type="search" id="chat-q" placeholder="Buscar nas mensagens…" value="${esc(f.q)}" style="max-width:240px">
+        </div>
+        <div id="chat-destaque"></div>
+        <div id="chat-lista" class="chat-lista"></div>
+        <form id="chat-form" class="chat-form">
+          <div class="chat-tipos">${Object.entries(TIPOS_CHAT).map(([k, v], i) => `<label class="chat-tipo"><input type="radio" name="tipo" value="${k}"${i === 0 ? ' checked' : ''}><span>${v.ic} ${v.l}</span></label>`).join('')}</div>
+          <textarea id="chat-texto" rows="2" placeholder="Escreva para a equipe… (Enter envia, Shift+Enter quebra a linha)"></textarea>
+          <div class="entre" style="gap:8px">
+            <label class="btn peq" style="cursor:pointer">📎 Foto ou comprovante<input type="file" id="chat-arq" accept="image/*,application/pdf" style="display:none"></label>
+            <span id="chat-arq-nome" class="dica" style="flex:1"></span>
+            <button class="btn prim" id="chat-enviar">Enviar</button>
+          </div>
+          <div class="erro-box oculto" id="chat-erro"></div>
+        </form>
+      </div>
+      <p class="dica" style="margin-top:8px">🔒 Área interna da equipe. Mensagens, fotos e comprovantes daqui <b>nunca</b> aparecem na página pública. Cada mensagem mostra quem enviou, data e horário.</p>`;
+    document.querySelectorAll('#chat-abas button').forEach((b) => { b.onclick = () => { f.tipo = b.dataset.t; listaChat(true); }; });
+    $('#chat-q').oninput = (e) => { f.q = e.target.value; listaChat(true); };
+    $('#chat-arq').onchange = (e) => { const a = e.target.files[0]; $('#chat-arq-nome').textContent = a ? `📎 ${a.name}` : ''; };
+    $('#chat-texto').onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarChat(); } };
+    $('#chat-form').onsubmit = (e) => { e.preventDefault(); enviarChat(); };
+    ligarRealtimeChat();
+    listaChat(true);
+  } else listaChat(false);
+  marcarVisto(); montarMenu();
+}
+function listaChat(rolar) {
+  const f = F.chat, q = (f.q || '').trim().toLowerCase();
+  document.querySelectorAll('#chat-abas button').forEach((b) => b.classList.toggle('on', b.dataset.t === f.tipo));
+  const box = $('#chat-lista'); if (!box) return;
+  const noFim = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const lista = (S.chat || []).filter((m) => (!f.tipo || (f.tipo === 'anexo' ? m.anexo_path : m.tipo === f.tipo))
+    && (!q || [m.texto, m.autor_nome, m.anexo_nome].join(' ').toLowerCase().includes(q)));
+  const ultCom = [...(S.chat || [])].reverse().find((m) => m.tipo === 'comunicado');
+  $('#chat-destaque').innerHTML = !f.tipo && ultCom ? `<div class="chat-fixo" onclick="F.chat.tipo='comunicado';listaChat(true)">📢 <b>Último comunicado</b> · ${esc(ultCom.autor_nome)} · ${dataHoraBR(ultCom.criado_em)}<br><span>${esc((ultCom.texto || ultCom.anexo_nome || '').slice(0, 180))}</span></div>` : '';
+  let dia = '';
+  box.innerHTML = lista.length ? lista.map((m) => {
+    const eu = m.criado_por === CLAIMS.sub;
+    const d = new Date(m.criado_em).toLocaleDateString('sv-SE');
+    const sep = d !== dia ? `<div class="chat-dia"><span>${d === hoje() ? 'Hoje' : dataBR(d)}</span></div>` : '';
+    dia = d;
+    const t = TIPOS_CHAT[m.tipo] || TIPOS_CHAT.mensagem;
+    const ehImg = m.anexo_path && /^image\//.test(m.anexo_tipo || '') || /\.(jpe?g|png|gif|webp|heic)$/i.test(m.anexo_path || '');
+    const anexo = !m.anexo_path ? '' : ehImg
+      ? `<img class="chat-img" data-path="${esc(m.anexo_path)}" alt="${esc(m.anexo_nome || 'imagem')}" onclick="verArquivo('${esc(m.anexo_path)}')">`
+      : `<button class="btn peq" onclick="verArquivo('${esc(m.anexo_path)}')">📎 ${esc(m.anexo_nome || 'Anexo')}</button>`;
+    const podeApagar = eu || PAPEL === 'admin';
+    return `${sep}<div class="msg${eu ? ' eu' : ''} t-${m.tipo}">
+      <div class="msg-cab"><b>${esc(m.autor_nome || 'Equipe')}</b>${m.tipo !== 'mensagem' ? ` <span class="badge ${t.cor}">${t.ic} ${t.l}</span>` : ''}
+        <small>${new Date(m.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}${m.editado_em ? ' · editada' : ''}</small>
+        ${podeApagar ? `<button class="link msg-x" title="Apagar mensagem" onclick="apagarMsg('${m.id}')">🗑</button>` : ''}</div>
+      ${m.texto ? `<div class="msg-txt">${esc(m.texto)}</div>` : ''}${anexo}</div>`;
+  }).join('') : `<p class="vazio">${f.tipo || q ? 'Nada encontrado com esse filtro.' : 'Nenhuma mensagem ainda. Comece a conversa da equipe! 🎄'}</p>`;
+  if (rolar || noFim) box.scrollTop = box.scrollHeight;
+  preencherImagensChat().catch(() => {});
+}
+window.listaChat = listaChat;
+let enviandoChat = false;
+async function enviarChat() {
+  if (enviandoChat) return;
+  const fm = $('#chat-form'), txt = $('#chat-texto'), arq = $('#chat-arq'), err = $('#chat-erro'), bt = $('#chat-enviar');
+  const texto = txt.value.trim(), file = arq.files[0], tipo = fm.elements.tipo.value;
+  if (!texto && !file) return;
+  enviandoChat = true; bt.disabled = true; bt.textContent = 'Enviando…'; err.classList.add('oculto');
+  try {
+    const reg = { tipo, texto: texto || null };
+    if (file) { reg.anexo_path = await enviarArquivo(file, 'chat', false); reg.anexo_nome = file.name; reg.anexo_tipo = file.type || null; }
+    const { error } = await sb.from('natal_chat').insert(reg);
+    if (error) throw error;
+    txt.value = ''; arq.value = ''; $('#chat-arq-nome').textContent = '';
+    fm.elements.tipo[0].checked = true;
+    await atualizarChat();
+    listaChat(true);
+  } catch (e) { err.textContent = msgErro(e); err.classList.remove('oculto'); }
+  finally { enviandoChat = false; bt.disabled = false; bt.textContent = 'Enviar'; txt.focus(); }
+}
+window.apagarMsg = async (id) => {
+  if (!(await confirmar('Apagar esta mensagem para toda a equipe?', 'Apagar'))) return;
+  const { error } = await sb.from('natal_chat').delete().eq('id', id);
+  if (error) return toast(msgErro(error), true);
+  await atualizarChat(); toast('Mensagem apagada');
+};
+
+// ============================================================
+// CATEGORIAS (criadas pela equipe)
+// ============================================================
+function gerenciarCategorias(tipo) {
+  if (!tem006()) return toast('Falta rodar o script 006 no banco para criar categorias.', true);
+  const padrao = tipo === 'despesa' ? CATEGORIAS_DESPESA : CATEGORIAS_ENTRADA;
+  const proprias = (S.categorias || []).filter((c) => c.tipo === tipo).sort((a, b) => a.nome.localeCompare(b.nome));
+  const { fundo, fechar } = abrirModal({
+    titulo: `🏷️ Categorias de ${tipo === 'despesa' ? 'despesas' : 'entradas'}`,
+    corpo: `<p class="dica"><b>Padrão do sistema:</b> ${padrao.map(esc).join(' · ')}</p>
+      <div class="secao-titulo">Criadas pela equipe</div>
+      ${proprias.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${proprias.map((c) => `<span class="badge b-ouro" style="font-size:13px">${esc(c.nome)} <button class="link" data-rmcat="${c.id}" title="Remover" style="color:var(--vermelho)">✕</button></span>`).join('')}</div>` : '<p class="dica">Nenhuma ainda.</p>'}
+      <form class="filtros" id="form-cat" style="margin-top:14px"><input id="cat-nome" placeholder="Nome da nova categoria" required style="flex:1;min-width:180px"><button class="btn prim">Adicionar</button></form>
+      <p class="dica" style="margin-top:8px">Também dá para criar digitando um nome novo direto no lançamento. Remover uma categoria não muda os lançamentos que já a usam.</p>`,
+  });
+  fundo.querySelector('#form-cat').onsubmit = async (e) => {
+    e.preventDefault();
+    const nome = fundo.querySelector('#cat-nome').value.trim(); if (!nome) return;
+    const { error } = await sb.from('natal_categorias').insert({ tipo, nome });
+    if (error) return toast(/duplicate|unique/i.test(error.message) ? 'Essa categoria já existe.' : msgErro(error), true);
+    fechar(); await recarregar(false); toast('Categoria criada'); gerenciarCategorias(tipo);
+  };
+  fundo.querySelectorAll('[data-rmcat]').forEach((b) => { b.onclick = async () => {
+    const { error } = await sb.from('natal_categorias').delete().eq('id', b.dataset.rmcat);
+    if (error) return toast(msgErro(error), true);
+    fechar(); await recarregar(false); gerenciarCategorias(tipo);
+  }; });
+}
+window.gerenciarCategorias = gerenciarCategorias;
+
+// ============================================================
+// CAIXA: DINHEIRO E PIX (indicadores + histórico de movimentações)
+// ============================================================
+function movimentacoes() {
+  const mov = [];
+  // Rifa: pagamentos confirmados agrupados por dia, forma e bloquinho (evita centenas de linhas de R$ 6,25)
+  const grupos = {};
+  for (const p of S.pagamentos.filter((x) => x.situacao === 'confirmado')) {
+    const b = S.bloqPorId[p.bloquinho_id];
+    const k = `${p.data}|${p.forma}|${p.bloquinho_id || ''}`;
+    (grupos[k] ||= { data: p.data, forma: p.forma, b, valor: 0, qtd: 0, criado_em: p.criado_em }).valor += Number(p.valor);
+    grupos[k].qtd++;
+  }
+  for (const g of Object.values(grupos)) mov.push({ tipo: 'entrada', data: g.data, forma: g.forma, valor: g.valor, categoria: 'Rifa',
+    descricao: g.b ? `Rifa · bloquinho ${g.b.controle ?? pad3(g.b.numero)}${g.b.responsavel_nome ? ' (' + g.b.responsavel_nome + ')' : ''} · ${g.qtd} pagamento(s)` : `Rifa · ${g.qtd} pagamento(s)`, quem: '', ordem: g.criado_em });
+  for (const r of S.receitas.filter((x) => x.situacao === 'recebido')) mov.push({ tipo: 'entrada', data: r.data, forma: r.forma, valor: Number(r.valor), categoria: catReceita(r), descricao: r.descricao + (r.doador ? ' — ' + r.doador : ''), quem: lancadoPor(r.criado_por), arq: r.comprovante_path, ordem: r.criado_em, abrir: `formReceita(S.receitas.find(x=>x.id==='${r.id}'))` });
+  for (const d of S.despesas.filter((x) => x.situacao === 'pago')) mov.push({ tipo: 'saida', data: d.data_compra, forma: d.forma_pagamento, valor: Number(d.valor_total), categoria: d.categoria + (d.tipo_custo === 'fixa' ? ' · fixa' : ''), descricao: d.descricao, quem: lancadoPor(d.criado_por), arq: d.comprovante_path, ordem: d.criado_em, abrir: `formDespesa(S.despesas.find(x=>x.id==='${d.id}'))` });
+  return mov.sort((a, b) => (a.data || '').localeCompare(b.data || '') || (a.ordem || '').localeCompare(b.ordem || ''));
+}
+function rCaixa(completo) {
+  const f = (F.caixa = { forma: '', tipo: '', de: '', ate: '', ...(F.caixa || {}) });
+  if (completo || !$('#cx-lista')) {
+    $('#conteudo').innerHTML = `<div id="cx-kpis"></div>
+      <div class="card"><div class="entre" style="flex-wrap:wrap;gap:8px"><h3 style="margin:0">📜 Histórico de movimentações</h3>
+        <div class="filtros">
+          <select id="cx-forma"><option value="">Dinheiro, PIX e outros</option><option value="dinheiro">Só dinheiro</option><option value="pix">Só PIX</option><option value="outros">Cartão/outros</option></select>
+          <select id="cx-tipo"><option value="">Entradas e saídas</option><option value="entrada">Só entradas</option><option value="saida">Só despesas</option></select>
+          <input type="date" id="cx-de" title="De" value="${esc(f.de)}"><input type="date" id="cx-ate" title="Até" value="${esc(f.ate)}">
+        </div></div>
+        <div id="cx-lista" style="margin-top:12px"></div></div>`;
+    $('#cx-forma').value = f.forma; $('#cx-tipo').value = f.tipo;
+    ['forma', 'tipo', 'de', 'ate'].forEach((k) => { $('#cx-' + k).onchange = (e) => { f[k] = e.target.value; listaCaixa(); }; });
+  }
+  listaCaixa();
+}
+function listaCaixa() {
+  const f = F.caixa, t = caixaDinPix(totais());
+  const comResp = soma(S.pessoas.map((p) => resumoPessoa(p)), (r) => r.pendenteEntrega);
+  const despPend = S.despesas.filter((d) => d.situacao === 'pendente');
+  $('#cx-kpis').innerHTML = cardDinPix(t).replace(/<button class="btn peq" onclick="irPara\('caixa'\)">Ver movimentações<\/button>/, '')
+    + (comResp > 0.009 || despPend.length ? `<div class="ok-box" style="margin:-6px 0 16px;background:#fff8e6;color:#7a5800;border-color:#f1dfa8">${comResp > 0.009 ? `💵 ${brl(comResp)} recebidos em dinheiro ainda estão com os responsáveis (não entregues ao caixa). ` : ''}${despPend.length ? `🧾 ${despPend.length} despesa(s) pendente(s) somando ${brl(soma(despPend, 'valor_total'))} ainda não entram no saldo.` : ''}</div>` : '');
+  const grupoForma = (x) => (['dinheiro', 'pix'].includes(x) ? x : 'outros');
+  const todas = movimentacoes();
+  let sd = 0, sp = 0, sg = 0;
+  for (const m of todas) { const v = m.tipo === 'entrada' ? m.valor : -m.valor; sg += v; if (m.forma === 'dinheiro') sd += v; else if (m.forma === 'pix') sp += v; m.saldoG = sg; m.saldoD = sd; m.saldoP = sp; }
+  const lista = todas.filter((m) => (!f.forma || grupoForma(m.forma) === f.forma) && (!f.tipo || m.tipo === f.tipo) && (!f.de || (m.data && m.data >= f.de)) && (!f.ate || (m.data && m.data <= f.ate))).reverse();
+  const col = f.forma === 'dinheiro' ? 'saldoD' : f.forma === 'pix' ? 'saldoP' : 'saldoG';
+  const ent = soma(lista.filter((m) => m.tipo === 'entrada'), 'valor'), sai = soma(lista.filter((m) => m.tipo === 'saida'), 'valor');
+  $('#cx-lista').innerHTML = lista.length ? `<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Movimento</th><th>Categoria</th><th>Forma</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo ${f.forma === 'dinheiro' ? 'em dinheiro' : f.forma === 'pix' ? 'no PIX' : 'geral'}</th><th>Lançado por</th><th></th></tr></thead><tbody>
+    ${lista.map((m) => `<tr${m.abrir ? ` style="cursor:pointer" onclick="${m.abrir}"` : ''}><td>${dataBR(m.data)}</td><td>${esc(m.descricao)}</td><td>${esc(m.categoria)}</td><td><span class="badge ${m.forma === 'pix' ? 'b-azul' : m.forma === 'dinheiro' ? 'b-verde' : 'b-cinza'}">${esc(NOME_FORMA[m.forma] || m.forma)}</span></td>
+      <td class="num">${m.tipo === 'entrada' ? `<b style="color:var(--verde2)">${brl(m.valor)}</b>` : ''}</td><td class="num">${m.tipo === 'saida' ? `<b style="color:var(--vermelho)">${brl(m.valor)}</b>` : ''}</td>
+      <td class="num">${f.forma === 'outros' ? '—' : brl(m[col])}</td><td><small>${esc(m.quem || '')}</small></td><td class="acoes">${linkArq(m.arq)}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td colspan="4">${lista.length} movimentação(ões)</td><td class="num">${brl(ent)}</td><td class="num">${brl(sai)}</td><td class="num">${brl(ent - sai)}</td><td colspan="2"></td></tr></tfoot></table></div>`
+    : '<p class="vazio">Nenhuma movimentação com esses filtros.</p>';
 }
 
 iniciar().catch((e) => { console.error(e); $('#sem-acesso-msg').textContent = 'Erro ao iniciar: ' + msgErro(e); mostrarTela('tela-sem-acesso'); });
