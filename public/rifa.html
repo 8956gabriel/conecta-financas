@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#8f0f1a">
 <title>🎄 Carretinha de Natal — Rifa Solidária</title>
-<meta name="description" content="Rifa Solidária, avisos e fotos da Carretinha de Natal.">
+<meta name="description" content="Prêmios, avisos, fotos e prestação de contas da Carretinha de Natal.">
 <meta property="og:title" content="🎄 Carretinha de Natal — Rifa Solidária">
-<meta property="og:description" content="Escolha seu número, veja os avisos e as fotos da Carretinha de Natal!">
+<meta property="og:description" content="Veja os prêmios, os avisos, as fotos e a prestação de contas da Carretinha de Natal!">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎄</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -146,7 +146,7 @@ footer{position:relative;z-index:1;text-align:center;color:#ffd9dc;font-size:12.
 </header>
 
 <nav class="abas" id="abas">
-  <button data-aba="rifa" class="on">🎟️ Rifa</button>
+  <button data-aba="rifa" class="on">🎄 Início</button>
   <button data-aba="avisos">📢 Avisos<span class="badge oculto" id="n-avisos"></span></button>
   <button data-aba="fotos">📸 Fotos<span class="badge oculto" id="n-fotos"></span></button>
   <button data-aba="contas" id="aba-contas" class="oculto">💰 Contas</button>
@@ -154,11 +154,7 @@ footer{position:relative;z-index:1;text-align:center;color:#ffd9dc;font-size:12.
 
 <main id="conteudo"><div class="card vazio">Carregando…</div></main>
 
-<div class="carrinho oculto" id="carrinho">
-  <div class="info"><b id="car-qtd"></b> · <span id="car-nums"></span><br><small>Total: <b id="car-total"></b></small></div>
-  <button class="btn claro" id="car-limpar">Limpar</button>
-  <a class="btn zap" id="car-zap" target="_blank" rel="noopener">💬 Pedir pelo WhatsApp</a>
-</div>
+<div class="carrinho oculto" id="carrinho"></div>
 
 <footer>Feito com ❤️ pela equipe da Carretinha de Natal</footer>
 
@@ -202,7 +198,7 @@ function cabecalho() {
   $('#titulo').textContent = D.nome || D.evento;
   $('#subtitulo').textContent = `Rifa Solidária ${D.ano}${D.data_sorteio ? ' · sorteio em ' + dataBR(D.data_sorteio) : ''}`;
   const insta = D.instagram ? D.instagram.replace(/^@/, '') : '';
-  $('#chips').innerHTML = `<span class="chip ouro">🎟️ ${brl(D.valor_numero)} por número</span>
+  $('#chips').innerHTML = `
     ${insta ? `<a class="chip insta" href="https://instagram.com/${encodeURIComponent(insta)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor"/></svg>@${esc(insta)}</a>` : ''}
     ${D.whatsapp ? `<a class="chip" href="https://wa.me/${esc(D.whatsapp)}" target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}`;
   const na = (D.avisos || []).length, nf = (D.fotos || []).length;
@@ -228,26 +224,12 @@ function renderRifa() {
     ${fixado ? `<div class="card faixa" style="cursor:pointer" onclick="irAba('avisos')"><b style="color:var(--verm)">📌 ${esc(fixado.titulo)}</b>${fixado.texto ? `<div class="dica" style="margin-top:4px">${esc(fixado.texto.slice(0, 160))}${fixado.texto.length > 160 ? '…' : ''}</div>` : ''}</div>` : ''}
     ${D.mensagem ? `<div class="card faixa"><p style="margin:0;white-space:pre-line">${esc(D.mensagem)}</p></div>` : ''}
     <div class="card">
-      <div class="stats"><div><b>${disp}</b><small>disponíveis</small></div><div><b>${vend}</b><small>já vendidos</small></div><div><b>${nums.length}</b><small>números</small></div></div>
+      <h2>🎟️ Andamento da rifa</h2>
+      <div class="stats"><div><b>${vend}</b><small>já vendidos</small></div><div><b>${nums.length}</b><small>números</small></div><div><b>${nums.length ? Math.round((vend / nums.length) * 100) : 0}%</b><small>vendido</small></div></div>
       <div class="barra"><i style="width:${nums.length ? (vend / nums.length) * 100 : 0}%"></i></div>
     </div>
     ${D.premios.length ? `<div class="card"><h2>🎁 Prêmios</h2><div class="premios">${D.premios.map((p, i) => `<div class="premio"><div class="foto">${p.foto ? `<img src="${esc(url(p.foto))}" alt="${esc(p.nome)}" loading="lazy">` : '🎁'}</div><div class="c"><span class="ordem">${p.ordem || i + 1}º prêmio</span><b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ''}</div></div>`).join('')}</div></div>` : ''}
-    <div class="card"><h2>🎟️ Escolha seus números</h2>
-      <div class="filtros">
-        <button data-f="todos" class="${filtro === 'todos' ? 'on' : ''}">Todos</button>
-        <button data-f="disp" class="${filtro === 'disp' ? 'on' : ''}">Disponíveis</button>
-        <button data-f="vend" class="${filtro === 'vend' ? 'on' : ''}">Vendidos</button>
-        <input type="search" id="busca" inputmode="numeric" placeholder="Procurar número…" value="${esc(busca)}">
-      </div>
-      ${nums.length ? `<div class="grid">${lista.map((x) => `<div class="n ${x[2]}${sel.has(x[0]) ? ' sel' : ''}" data-n="${x[0]}">${n2(x[0])}<small>${x[2] === 'd' ? 'livre' : x[2] === 'r' ? 'reservado' : esc(x[3] || 'vendido')}</small></div>`).join('') || '<p class="vazio">Nenhum número encontrado.</p>'}</div>` : '<p class="vazio">Os números ainda não foram liberados.</p>'}
-      <div class="legenda"><span><i style="background:#fff;border:1px solid #cfe6d6"></i>Disponível</span><span><i style="background:#1f7a45"></i>Selecionado</span><span><i style="background:#fdeced;border:1px solid #f3c6ca"></i>Vendido</span></div>
-    </div>
-    ${D.pix_chave ? `<div class="card"><h2>💳 Pagamento via PIX</h2><div class="pix"><code>${esc(D.pix_chave)}</code><button class="btn verm" id="copiar-pix">Copiar chave</button></div>${D.pix_nome ? `<p class="dica" style="margin:8px 0 0">Recebedor: <b>${esc(D.pix_nome)}</b></p>` : ''}<p class="dica" style="margin:8px 0 0">Depois de pagar, envie o comprovante pelo WhatsApp informando seus números. A reserva é confirmada pela equipe.</p></div>` : ''}
     ${(D.agenda || []).length ? `<div class="card"><h2>🗓️ Programação</h2><div class="agenda">${D.agenda.map((a) => `<div class="ag"><div class="dt">${a.data ? `<b>${dataBR(a.data).slice(0, 5)}</b><small>${SEM[new Date(a.data + 'T12:00').getDay()]}</small>` : '<b>—</b><small>a definir</small>'}</div><div><b>${esc(a.titulo)}</b><small>${[a.hora, a.local].filter(Boolean).map(esc).join(' · ')}</small></div></div>`).join('')}</div></div>` : ''}`;
-  document.querySelectorAll('[data-f]').forEach((b) => { b.onclick = () => { filtro = b.dataset.f; renderRifa(); }; });
-  const bi = $('#busca'); if (bi) bi.oninput = (e) => { busca = e.target.value.replace(/\D/g, ''); renderRifa(); const nb = $('#busca'); nb.focus(); nb.setSelectionRange(nb.value.length, nb.value.length); };
-  document.querySelectorAll('.n.d').forEach((el) => { el.onclick = () => { const k = +el.dataset.n; sel.has(k) ? sel.delete(k) : sel.add(k); el.classList.toggle('sel'); carrinho(); }; });
-  const cp = $('#copiar-pix'); if (cp) cp.onclick = async () => { try { await navigator.clipboard.writeText(D.pix_chave); toast('Chave PIX copiada'); } catch (e) { prompt('Copie a chave PIX:', D.pix_chave); } };
   carrinho();
 }
 
@@ -347,19 +329,8 @@ function lightbox(lista, i) {
   mostra(); document.body.appendChild(box);
 }
 
-function carrinho() {
-  const box = $('#carrinho');
-  if (!sel.size || !D || aba !== 'rifa') { box.classList.add('oculto'); return; }
-  const lista = [...sel].sort((a, b) => a - b);
-  const total = lista.length * Number(D.valor_numero);
-  $('#car-qtd').textContent = `${lista.length} número(s)`;
-  $('#car-nums').textContent = lista.map(n2).join(', ');
-  $('#car-total').textContent = brl(total);
-  const msg = `Olá! Quero comprar ${lista.length === 1 ? 'o número' : 'os números'} ${lista.map(n2).join(', ')} da Rifa Solidária (${D.nome || D.evento} ${D.ano}). Total: ${brl(total)}.\nMeu nome: \nMeu telefone: `;
-  $('#car-zap').href = D.whatsapp ? `https://wa.me/${D.whatsapp}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
-  box.classList.remove('oculto');
-}
-$('#car-limpar').onclick = () => { sel.clear(); renderRifa(); };
+// Venda online desativada: a página pública só divulga e presta contas (sem escolha de números, carrinho ou PIX).
+function carrinho() { $('#carrinho').classList.add('oculto'); }
 
 carregar();
 setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.lightbox') && document.activeElement?.id !== 'busca') carregar(); }, 60000);

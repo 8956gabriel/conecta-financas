@@ -1538,7 +1538,7 @@ const linkPublico = () => `${location.origin}/rifa.html?c=${S.grupo.slug || ''}`
 function caixaLinkPublico() {
   if (!S.grupo.slug) return '';
   const url = linkPublico();
-  const texto = `🎄 ${S.config.nome_evento || 'Carretinha de Natal'} ${S.config.ano} — Rifa Solidária! Escolha seu número (${brl(S.config.valor_numero)} cada) e ajude a Carretinha: ${url}`;
+  const texto = `🎄 ${S.config.nome_evento || 'Carretinha de Natal'} ${S.config.ano} — veja os prêmios, os avisos, as fotos e a prestação de contas da Carretinha: ${url}`;
   return `<div class="link-publico"><span>🔗</span><code>${esc(url)}</code>
     <button class="btn peq" onclick="copiarTexto('${esc(url)}')">Copiar link</button>
     <a class="btn peq" href="${esc(url)}" target="_blank" rel="noopener">Abrir</a>
@@ -1552,7 +1552,7 @@ async function rConfig() {
   const c = S.config, g = S.grupo;
   $('#conteudo').innerHTML = `
     <div class="card"><h3>📣 Link público para divulgar os números</h3>
-      <p class="dica" style="margin-bottom:10px">Qualquer pessoa com o link vê os números <b>disponíveis e vendidos</b>, os prêmios, a data do sorteio e a chave PIX, e pode pedir números pelo WhatsApp. <b>Nomes e telefones dos compradores nunca aparecem.</b></p>
+      <p class="dica" style="margin-bottom:10px">Qualquer pessoa com o link vê os prêmios, os avisos, as fotos, a programação, o andamento da rifa e a <b>prestação de contas</b>, só para consultar. A página não vende números online. <b>Telefones, CPF e dados dos compradores nunca aparecem.</b></p>
       ${caixaLinkPublico()}
     </div>
     <div class="grade2">
