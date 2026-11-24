@@ -187,7 +187,7 @@ function rPapaiNoel() {
   const ed = pode('divulgacao');
   $('#conteudo').innerHTML = `
     <div class="card" style="background:linear-gradient(135deg,#b91c1c,#7f1d1d);color:#fff;border:none"><h3 style="color:#fff">🎅 Aba do Papai Noel na página pública</h3>
-      <p style="margin:6px 0 0;opacity:.9">Na página, qualquer pessoa digita o nome de uma criança e o Papai Noel aparece na tela <b>falando com a voz do celular</b> uma mensagem com o nome dela. Dá para mandar o link no WhatsApp: quem abre vê o Papai Noel falando o nome. Também dá para baixar um cartão com a mensagem. As crianças podem mandar recados, e vocês respondem como Papai Noel.</p>
+      <p style="margin:6px 0 0;opacity:.9">Na página, qualquer pessoa digita o nome de uma criança e o Papai Noel aparece na tela <b>falando com voz de Papai Noel</b> uma mensagem com o nome dela. Dá para mandar o link no WhatsApp: quem abre vê o Papai Noel falando o nome. Também dá para baixar um cartão com a mensagem. As crianças podem mandar recados, e vocês respondem como Papai Noel.</p>
       <a class="btn ouro" style="margin-top:12px" href="${esc(linkPublico())}#papainoel" target="_blank" rel="noopener">Ver a aba do Papai Noel</a></div>
     ${ed ? `<div class="card"><h3>✍️ Recado do Papai Noel</h3><p class="dica" style="margin:4px 0 8px">Texto que entra em toda mensagem personalizada, depois do nome. Use {nome} onde quiser o nome da pessoa. Deixe vazio para usar as mensagens prontas.</p>
       <textarea id="pn-msg" placeholder="Ex.: Ho ho ho! Olá, {nome}! Eu e meus duendes estamos muito felizes com você. Neste Natal, a Carretinha vai passar na sua rua com muitos doces!">${esc(S.grupo.papai_noel_msg || '')}</textarea>

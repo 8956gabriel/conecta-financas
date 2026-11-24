@@ -600,6 +600,7 @@ const FRASES = [
   (n) => `Olá, ${n}! Ho ho ho! O Papai Noel está aqui para desejar um Natal cheio de amor, paz e muita alegria para você e para toda a sua família. Nunca esqueça: o verdadeiro presente é estarmos juntos. Até logo, ${n}!`,
 ];
 let vozes = [];
+let audioNoel = null;
 function carregarVozes() { try { vozes = speechSynthesis.getVoices().filter((v) => /^pt/i.test(v.lang)); } catch (e) { vozes = []; } }
 if ('speechSynthesis' in window) { carregarVozes(); speechSynthesis.onvoiceschanged = carregarVozes; }
 const nomeLimpo = (n) => String(n || '').replace(/[^\p{L}\s'-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -623,7 +624,7 @@ function renderNoel() {
             <button class="btn claro" id="noel-outra">🔄 Outra mensagem</button>
             <button class="btn zap" id="noel-zap">Enviar no WhatsApp</button>
             <button class="btn claro" id="noel-cartao">🖼️ Baixar cartão</button></div>
-          <p class="dica" style="margin-top:8px">A voz é a do seu celular ou computador. Aumente o volume! O nome digitado não fica salvo.</p></div></div></div>
+          <p class="dica" style="margin-top:8px">Aumente o volume! O nome digitado não fica salvo.</p></div></div></div>
     ${X?.participacao ? `<div class="card"><h2>💌 Escreva para o Papai Noel</h2><form class="form-p" id="form-carta">
       <label>Seu nome *<input name="nome" maxlength="80" required></label><label>Bairro<input name="bairro" maxlength="80"></label>
       <label class="inteiro">Seu recado<textarea name="texto" maxlength="1200" required placeholder="Querido Papai Noel…"></textarea></label>
@@ -634,16 +635,30 @@ function renderNoel() {
   const falar = () => {
     const nome = $('#noel-nome').value; const txt = textoNoel(nome, fraseIdx);
     $('#fala').innerHTML = esc(txt).replace(esc(nomeLimpo(nome) || 'meu amigo'), `<b>${esc(nomeLimpo(nome) || 'meu amigo')}</b>`);
-    if (!('speechSynthesis' in window)) { toast('Seu aparelho não tem voz disponível; leia a mensagem 😊'); return; }
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(txt.replace(/Ho ho ho!/g, 'Rô, rô, rô!'));
-    u.lang = 'pt-BR'; u.pitch = 0.55; u.rate = 0.88;
-    const v = vozes.find((x) => /male|masc|daniel|ricardo|antonio|felipe/i.test(x.name)) || vozes.find((x) => /pt-BR/i.test(x.lang)) || vozes[0];
-    if (v) u.voice = v;
     const box = $('#santa');
-    u.onstart = () => box.classList.add('falando');
-    u.onend = u.onerror = () => box.classList.remove('falando');
-    speechSynthesis.speak(u);
+    const falado = txt.replace(/Ho ho ho!/g, 'Rô, rô, rô!');
+    const vozDoCelular = () => {
+      if (!('speechSynthesis' in window)) { toast('Seu aparelho não tem voz disponível; leia a mensagem 😊'); return; }
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(falado);
+      u.lang = 'pt-BR'; u.pitch = 0.55; u.rate = 0.88;
+      const v = vozes.find((x) => /male|masc|daniel|ricardo|antonio|felipe/i.test(x.name)) || vozes.find((x) => /pt-BR/i.test(x.lang)) || vozes[0];
+      if (v) u.voice = v;
+      u.onstart = () => box.classList.add('falando');
+      u.onend = u.onerror = () => box.classList.remove('falando');
+      speechSynthesis.speak(u);
+    };
+    // Voz de verdade do Papai Noel (gerada no servidor); se falhar, usa a do celular.
+    try { audioNoel?.pause(); } catch (e) {}
+    try { speechSynthesis.cancel(); } catch (e) {}
+    const bt = $('#noel-ouvir'); bt.disabled = true; const rot = bt.textContent; bt.textContent = '🎅 Preparando a voz...';
+    const a = new Audio(`/api/voz?texto=${encodeURIComponent(falado)}`);
+    audioNoel = a;
+    const pronto = () => { bt.disabled = false; bt.textContent = rot; };
+    a.onplaying = () => { pronto(); box.classList.add('falando'); };
+    a.onended = a.onpause = () => box.classList.remove('falando');
+    a.onerror = () => { pronto(); if (audioNoel === a) vozDoCelular(); };
+    a.play().catch(() => { pronto(); if (audioNoel === a) vozDoCelular(); });
   };
   $('#noel-ouvir').onclick = falar;
   $('#noel-outra').onclick = () => { fraseIdx++; falar(); };
