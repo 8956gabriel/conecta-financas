@@ -1672,6 +1672,10 @@ function rDivulgacao() {
             <div style="width:84px;height:84px;border-radius:50%;background:#b3141f;display:grid;place-items:center;overflow:hidden;flex:none;border:3px solid var(--dourado2)">${g.logo_path ? `<img src="${esc(urlPublica(g.logo_path))}" style="width:100%;height:100%;object-fit:cover" alt="">` : '<span style="font-size:38px">🎄</span>'}</div>
             <label style="flex:1">Logo da Carretinha (imagem)<input type="file" name="logo" accept="image/*">${g.logo_path ? '<span class="dica"><label style="display:inline;font-weight:500"><input type="checkbox" name="logo_remover" style="width:auto"> remover logo</label></span>' : ''}</label>
           </div>
+          <div style="margin-top:4px">
+            <label>Foto principal da página (aparece no início, no lugar das fotos dos prêmios)<input type="file" name="capa" accept="image/*">${g.foto_capa_path ? '<span class="dica"><label style="display:inline;font-weight:500"><input type="checkbox" name="capa_remover" style="width:auto"> remover foto principal</label></span>' : ''}</label>
+            ${g.foto_capa_path ? `<img src="${esc(urlPublica(g.foto_capa_path))}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-top:6px" alt="Foto principal">` : ''}
+          </div>
           <div class="grade-form">
             ${campoHTML({ k: 'nome', l: 'Nome que aparece na página', full: true }, g.nome)}
             ${campoHTML({ k: 'instagram', l: 'Instagram', dica: 'Ex.: @carretinhadenatal' }, g.instagram)}
@@ -1708,6 +1712,11 @@ function rDivulgacao() {
         whatsapp: tel ? (tel.length <= 11 ? '55' + tel : tel) : null, publico_ativo: fd.elements.publico_ativo.value === 'true',
         mostrar_iniciais: fd.elements.mostrar_iniciais.value === 'true', mensagem_publica: fd.elements.mensagem_publica.value.trim() || null };
       if (fd.elements.transparencia_ativa) d.transparencia_ativa = fd.elements.transparencia_ativa.value === 'true';
+      if (fd.elements.capa) {
+        const capa = fd.elements.capa.files[0];
+        if (capa) d.foto_capa_path = await enviarArquivo(capa, 'capa', true);
+        else if (fd.elements.capa_remover?.checked) d.foto_capa_path = null;
+      }
       const file = fd.elements.logo.files[0];
       if (file) d.logo_path = await enviarArquivo(file, 'logo', true);
       else if (fd.elements.logo_remover?.checked) d.logo_path = null;

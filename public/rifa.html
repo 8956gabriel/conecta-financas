@@ -165,6 +165,34 @@ footer{position:relative;z-index:1;text-align:center;color:#ffd9dc;font-size:12.
 @media (max-width:560px){.form-p{grid-template-columns:1fr}}
 @media (max-width:560px){.abas{flex-wrap:wrap;gap:4px}.hero h1{font-size:34px}.stats b{font-size:19px}.grid{grid-template-columns:repeat(auto-fill,minmax(52px,1fr))}.abas button{padding:8px 11px;font-size:13.5px}}
 .leaflet-container{z-index:0;isolation:isolate;font:inherit}
+.capa{padding:0;overflow:hidden}.capa img{width:100%;display:block;max-height:460px;object-fit:cover}
+.lista-premios{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.lista-premios>div{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid var(--borda);border-radius:12px;padding:10px 12px}
+.lista-premios .ordem{margin:0;min-width:40px;text-align:center}
+.lista-premios small{display:block;color:var(--txt2)}
+.noel{display:grid;grid-template-columns:260px 1fr;gap:18px;align-items:center}
+.noel svg{width:100%;max-width:260px;display:block;margin:0 auto;filter:drop-shadow(0 10px 20px rgba(0,0,0,.25))}
+.noel .fala{background:#fff;border:3px solid var(--ouro2);border-radius:20px;padding:16px 18px;font-size:18px;line-height:1.55;min-height:120px;position:relative}
+.noel .fala::before{content:"";position:absolute;left:-14px;top:40px;border:12px solid transparent;border-right-color:var(--ouro2)}
+.noel .fala b{color:var(--verm)}
+#boca{transform-origin:130px 182px;transition:transform .08s}
+.falando #boca{animation:fala .22s infinite alternate}
+@keyframes fala{from{transform:scaleY(.35)}to{transform:scaleY(1.25)}}
+.falando #olhos{animation:pisca2 3s infinite}
+@keyframes pisca2{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+#olhos{transform-origin:130px 128px}
+.ano{display:grid;grid-template-columns:86px 1fr;gap:14px;position:relative}
+.ano .bola{background:linear-gradient(135deg,var(--verm3),var(--verm2));color:#fff;font-weight:800;font-size:22px;border-radius:16px;text-align:center;padding:12px 4px;height:fit-content;box-shadow:0 6px 16px rgba(0,0,0,.2)}
+.ano .bola small{display:block;font-size:11px;font-weight:600;color:#ffd9dc}
+.mini-gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;margin-top:8px}
+.mini-gal img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:zoom-in;display:block}
+.equipe{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.equipe>div{background:#fff;border:1px solid var(--borda);border-radius:14px;padding:12px}
+.equipe img{width:56px;height:56px;border-radius:50%;object-fit:cover;float:left;margin:0 10px 4px 0;border:2px solid var(--ouro2)}
+.noite{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--borda);border-radius:14px;padding:10px 12px;margin-top:8px}
+.noite .n{min-width:52px;text-align:center;background:var(--verde);color:#fff;border-radius:12px;padding:6px 4px;font-weight:800}
+.noite .n small{display:block;font-size:10.5px;font-weight:600;color:#d6f0de}
+@media (max-width:640px){.noel{grid-template-columns:1fr}.noel .fala::before{display:none}.ano{grid-template-columns:64px 1fr}}
 </style>
 </head>
 <body>
@@ -181,6 +209,10 @@ footer{position:relative;z-index:1;text-align:center;color:#ffd9dc;font-size:12.
   <button data-aba="rifa" class="on">🎄 Início</button>
   <button data-aba="avisos">📢 Avisos<span class="badge oculto" id="n-avisos"></span></button>
   <button data-aba="fotos">📸 Fotos<span class="badge oculto" id="n-fotos"></span></button>
+  <button data-aba="papainoel" id="aba-noel" class="oculto">🎅 Papai Noel</button>
+  <button data-aba="dezanos" id="aba-10" class="oculto">🎞️ 10 anos</button>
+  <button data-aba="bastidores" id="aba-bast" class="oculto">🎬 Bastidores</button>
+  <button data-aba="novena" id="aba-novena" class="oculto">🙏 Novena</button>
   <button data-aba="onde" id="aba-onde" class="oculto">📍 Onde encontrar</button>
   <button data-aba="participe" id="aba-part" class="oculto">💬 Participe</button>
   <button data-aba="contas" id="aba-contas" class="oculto">💰 Contas</button>
@@ -205,7 +237,7 @@ const dataBR = (d) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '');
 const n2 = (n) => String(n).padStart(2, '0');
 const url = (p) => (p ? sb.storage.from('natal-publico').getPublicUrl(p).data.publicUrl : '');
 const SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-let D = null, X = null, aba = (['rifa', 'avisos', 'fotos', 'contas', 'onde', 'participe'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'rifa'), filtro = 'todos', busca = '';
+let D = null, X = null, M = null, aba = (['rifa', 'avisos', 'fotos', 'contas', 'onde', 'participe', 'papainoel', 'dezanos', 'bastidores', 'novena'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'rifa'), filtro = 'todos', busca = '';
 const sel = new Set();
 
 $('#luzes').innerHTML = '<i></i>'.repeat(14);
@@ -218,7 +250,7 @@ window.irAba = irAba;
 
 async function carregar() {
   if (!slug) { $('#conteudo').innerHTML = '<div class="card vazio">Link incompleto. Peça o link para a organização.</div>'; return; }
-  const [{ data, error }] = await Promise.all([sb.rpc('natal_publico', { p_slug: slug }), carregarContas().catch(() => {}), carregarExtra().catch(() => {})]);
+  const [{ data, error }] = await Promise.all([sb.rpc('natal_publico', { p_slug: slug }), carregarContas().catch(() => {}), carregarExtra().catch(() => {}), carregarMais().catch(() => {})]);
   if (error) { if (!D) $('#conteudo').innerHTML = '<div class="card vazio">Não foi possível carregar agora. Tente novamente em instantes.</div>'; return; }
   if (!data) { $('#conteudo').innerHTML = '<div class="card vazio">Esta página não está disponível (link desativado ou incorreto).</div>'; return; }
   D = data;
@@ -247,6 +279,10 @@ function render() {
   if (aba === 'fotos') return renderFotos();
   if (aba === 'contas') return renderContas();
   if (aba === 'onde' && X) return renderOnde();
+  if (aba === 'papainoel' && M) return renderNoel();
+  if (aba === 'dezanos' && M) return renderDezAnos();
+  if (aba === 'bastidores' && M) return renderBastidores();
+  if (aba === 'novena' && M) return renderNovena();
   if (aba === 'participe' && X) return renderParticipe();
   renderRifa();
 }
@@ -257,6 +293,7 @@ function renderRifa() {
   const lista = nums.filter((x) => (filtro === 'todos' || (filtro === 'disp' ? x[2] === 'd' : x[2] !== 'd')) && (!busca || String(x[0]).includes(busca.replace(/^0+/, ''))));
   const fixado = (D.avisos || []).find((a) => a.fixado);
   $('#conteudo').innerHTML = `
+    ${X && X.capa ? `<div class="card capa"><img src="${esc(url(X.capa))}" alt="${esc(D.nome || 'Carretinha de Natal')}"></div>` : ''}
     ${fixado ? `<div class="card faixa" style="cursor:pointer" onclick="irAba('avisos')"><b style="color:var(--verm)">📌 ${esc(fixado.titulo)}</b>${fixado.texto ? `<div class="dica" style="margin-top:4px">${esc(fixado.texto.slice(0, 160))}${fixado.texto.length > 160 ? '…' : ''}</div>` : ''}</div>` : ''}
     ${D.mensagem ? `<div class="card faixa"><p style="margin:0;white-space:pre-line">${esc(D.mensagem)}</p></div>` : ''}
     ${X && X.sorteados.length ? `<div class="card faixa"><h2>🏆 Ganhadores</h2><div class="ganh">${X.sorteados.map((g) => `<div><span class="nb">${n2(g.numero)}</span><div><b>${esc(g.ganhador || 'Ganhador(a)')}</b><small>🎁 ${esc(g.premio || 'Prêmio')}</small></div></div>`).join('')}</div><p class="dica" style="margin:10px 0 0">Parabéns aos ganhadores! 🎉</p></div>` : ''}
@@ -265,7 +302,7 @@ function renderRifa() {
       <div class="stats"><div><b>${vend}</b><small>já vendidos</small></div><div><b>${nums.length}</b><small>números</small></div><div><b>${nums.length ? Math.round((vend / nums.length) * 100) : 0}%</b><small>vendido</small></div></div>
       <div class="barra"><i style="width:${nums.length ? (vend / nums.length) * 100 : 0}%"></i></div>
     </div>
-    ${D.premios.length ? `<div class="card"><h2>🎁 Prêmios</h2><div class="premios">${D.premios.map((p, i) => `<div class="premio"><div class="foto">${p.foto ? `<img src="${esc(url(p.foto))}" alt="${esc(p.nome)}" loading="lazy">` : '🎁'}</div><div class="c"><span class="ordem">${p.ordem || i + 1}º prêmio</span><b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ''}</div></div>`).join('')}</div></div>` : ''}
+    ${D.premios.length ? `<div class="card"><h2>🎁 Prêmios</h2><div class="lista-premios">${D.premios.map((p, i) => `<div><span class="ordem">${p.ordem || i + 1}º</span><div><b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ''}</div></div>`).join('')}</div></div>` : ''}
     ${(D.agenda || []).length ? `<div class="card"><h2>🗓️ Programação</h2><div class="agenda">${D.agenda.map((a) => `<div class="ag"><div class="dt">${a.data ? `<b>${dataBR(a.data).slice(0, 5)}</b><small>${SEM[new Date(a.data + 'T12:00').getDay()]}</small>` : '<b>—</b><small>a definir</small>'}</div><div><b>${esc(a.titulo)}</b><small>${[a.hora, a.local].filter(Boolean).map(esc).join(' · ')}</small></div></div>`).join('')}</div></div>` : ''}`;
   carrinho();
 }
@@ -506,11 +543,183 @@ function reduzirImagem(file) {
   });
 }
 
+// ---------- 10 anos, bastidores, Papai Noel e novena ----------
+async function carregarMais() {
+  const { data, error } = await sb.rpc('natal_publico_mais', { p_slug: slug });
+  if (error || !data) { M = null; return; }
+  M = data;
+  $('#aba-noel').classList.remove('oculto');
+  $('#aba-10').classList.toggle('oculto', !(M.anos.length || M.memorias.length || M.equipe.length));
+  $('#aba-bast').classList.toggle('oculto', !M.bastidores.length);
+  $('#aba-novena').classList.toggle('oculto', !(M.novena_ativa || M.novena.length));
+}
+function renderDezAnos() {
+  carrinho(); limparMapas();
+  const ini = M.fundacao || 2017, fim = Math.max(D.ano || new Date().getFullYear(), ini);
+  const anos = [...new Set([...M.anos.map((a) => a.ano), ...M.memorias.map((m) => m.ano)])].sort((a, b) => b - a);
+  const todas = M.memorias.map((m) => ({ src: url(m.foto), legenda: `${m.ano}${m.legenda ? ' — ' + m.legenda : ''}` }));
+  $('#conteudo').innerHTML = `
+    <div class="card" style="text-align:center;background:linear-gradient(135deg,#14532d,#1f7a45);color:#fff">
+      <div style="font-size:42px">🎄✨</div><h2 style="justify-content:center;color:#f2cf6b;font-size:28px;margin:0">${fim - ini + 1} anos de Carretinha de Natal</h2>
+      <p style="margin:6px 0 0;color:#d6f0de">${ini} — ${fim} · uma história de alegria, doces e solidariedade em Ivatuba</p></div>
+    ${M.equipe.length ? `<div class="card"><h2>💬 Quem faz a Carretinha</h2><div class="equipe">${M.equipe.map((e) => `<div>${e.foto ? `<img src="${esc(url(e.foto))}" alt="">` : ''}<b>${esc(e.nome)}</b><small class="dica" style="display:block">${esc([e.funcao, e.desde && 'desde ' + e.desde].filter(Boolean).join(' · '))}</small><p style="margin:6px 0 0;clear:both;font-style:italic">“${esc(e.texto)}”</p></div>`).join('')}</div></div>` : ''}
+    ${anos.length ? `<div class="card"><h2>📜 Ano a ano</h2><div style="display:flex;flex-direction:column;gap:18px">${anos.map((a) => { const info = M.anos.find((x) => x.ano === a) || {}; const fs = M.memorias.filter((m) => m.ano === a); return `<div class="ano"><div class="bola">${a}<small>${a - ini + 1}ª edição</small></div><div>
+      <b style="font-size:17px;color:var(--verm)">${esc(info.titulo || (a === ini ? 'A primeira Carretinha' : 'Carretinha ' + a))}</b>${info.destaque ? `<div class="dica">⭐ ${esc(info.destaque)}</div>` : ''}
+      ${info.texto ? `<p style="margin:6px 0 0;white-space:pre-line">${esc(info.texto)}</p>` : ''}
+      ${fs.length ? `<div class="mini-gal">${fs.map((m) => `<img src="${esc(url(m.foto))}" alt="${esc(m.legenda || '')}" loading="lazy" data-src="${esc(url(m.foto))}">`).join('')}</div>` : ''}</div></div>`; }).join('')}</div></div>` : '<div class="card vazio">A retrospectiva está sendo preparada! 🎞️</div>'}`;
+  document.querySelectorAll('.mini-gal img').forEach((im) => { im.onclick = () => lightbox(todas, Math.max(0, todas.findIndex((f) => f.src === im.dataset.src))); });
+}
+let etapaSel = '';
+function renderBastidores() {
+  carrinho(); limparMapas();
+  const etapas = [...new Set(M.bastidores.map((b) => b.etapa).filter(Boolean))];
+  const lista = M.bastidores.filter((b) => !etapaSel || b.etapa === etapaSel);
+  const fs = lista.map((b) => ({ src: url(b.foto), legenda: [b.etapa, b.legenda].filter(Boolean).join(' — ') }));
+  $('#conteudo').innerHTML = `<div class="card"><h2>🎬 Bastidores da Carretinha</h2><p class="dica" style="margin:-6px 0 12px">Veja como tudo é preparado com muito carinho pela equipe!</p>
+    ${etapas.length > 1 ? `<div class="filtros"><button class="${!etapaSel ? 'on' : ''}" data-e="">Tudo</button>${etapas.map((e) => `<button class="${etapaSel === e ? 'on' : ''}" data-e="${esc(e)}">${esc(e)}</button>`).join('')}</div>` : ''}
+    <div class="galeria">${lista.map((b, i) => `<figure data-i="${i}"><img src="${esc(url(b.foto))}" alt="" loading="lazy"><figcaption>${b.etapa ? `<b>${esc(b.etapa)}</b><br>` : ''}${esc(b.legenda || '')}${b.autor ? `<br><small>📷 ${esc(b.autor)}${b.data ? ' · ' + dataBR(b.data) : ''}</small>` : ''}</figcaption></figure>`).join('')}</div></div>`;
+  document.querySelectorAll('.filtros [data-e]').forEach((b) => { b.onclick = () => { etapaSel = b.dataset.e; renderBastidores(); }; });
+  document.querySelectorAll('.galeria figure').forEach((f) => { f.onclick = () => lightbox(fs, +f.dataset.i); });
+}
+
+// ---------- 🎅 Papai Noel falando (voz do próprio aparelho) ----------
+const SANTA = `<svg viewBox="0 0 260 300" aria-label="Papai Noel"><defs><radialGradient id="pele" cx="50%" cy="45%"><stop offset="0" stop-color="#ffd9c2"/><stop offset="1" stop-color="#f1b89a"/></radialGradient></defs>
+  <path d="M40 120 Q130 -40 222 112 Z" fill="#c8102e"/><path d="M182 40 Q232 30 236 92" stroke="#c8102e" stroke-width="26" fill="none" stroke-linecap="round"/><circle cx="238" cy="98" r="17" fill="#fff"/>
+  <rect x="34" y="104" width="192" height="30" rx="15" fill="#fff"/>
+  <ellipse cx="130" cy="150" rx="70" ry="66" fill="url(#pele)"/>
+  <path d="M52 156 Q58 268 130 288 Q202 268 208 156 Q190 214 130 214 Q70 214 52 156Z" fill="#fff"/>
+  <g id="olhos"><ellipse cx="104" cy="128" rx="8" ry="10" fill="#2a1215"/><ellipse cx="156" cy="128" rx="8" ry="10" fill="#2a1215"/><circle cx="107" cy="124" r="2.6" fill="#fff"/><circle cx="159" cy="124" r="2.6" fill="#fff"/></g>
+  <path d="M90 110 Q104 100 118 110" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M142 110 Q156 100 170 110" stroke="#fff" stroke-width="7" fill="none" stroke-linecap="round"/>
+  <circle cx="88" cy="160" r="12" fill="#f28c8c" opacity=".6"/><circle cx="172" cy="160" r="12" fill="#f28c8c" opacity=".6"/>
+  <ellipse cx="130" cy="156" rx="13" ry="11" fill="#e98d78"/>
+  <ellipse id="boca" cx="130" cy="186" rx="15" ry="9" fill="#7a1a22"/>
+  <path d="M84 176 Q108 160 130 172 Q152 160 176 176 Q160 186 130 180 Q100 186 84 176Z" fill="#fff"/></svg>`;
+const FRASES = [
+  (n) => `Ho ho ho! Olá, ${n}! Aqui é o Papai Noel, direto do Polo Norte! Fiquei sabendo que você é uma pessoa muito especial. Continue sendo carinhoso com a sua família e com os seus amigos. Neste Natal, a Carretinha de Natal vai passar pela sua rua cheia de alegria e doces. Feliz Natal, ${n}!`,
+  (n) => `Ho ho ho! ${n}, que alegria falar com você! Meus duendes me contaram que você ajudou bastante este ano. Estou muito orgulhoso! Fique de olho na rua, porque a Carretinha de Natal está chegando. Um abraço bem grande do Papai Noel!`,
+  (n) => `Olá, ${n}! Ho ho ho! O Papai Noel está aqui para desejar um Natal cheio de amor, paz e muita alegria para você e para toda a sua família. Nunca esqueça: o verdadeiro presente é estarmos juntos. Até logo, ${n}!`,
+];
+let vozes = [];
+function carregarVozes() { try { vozes = speechSynthesis.getVoices().filter((v) => /^pt/i.test(v.lang)); } catch (e) { vozes = []; } }
+if ('speechSynthesis' in window) { carregarVozes(); speechSynthesis.onvoiceschanged = carregarVozes; }
+const nomeLimpo = (n) => String(n || '').replace(/[^\p{L}\s'-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+function textoNoel(nome, i) {
+  const n = nomeLimpo(nome) || 'meu amigo';
+  if (M?.papai_noel_msg) return M.papai_noel_msg.includes('{nome}') ? M.papai_noel_msg.replaceAll('{nome}', n) : `Ho ho ho! Olá, ${n}! ${M.papai_noel_msg}`;
+  return FRASES[i % FRASES.length](n);
+}
+let fraseIdx = 0;
+function renderNoel() {
+  carrinho(); limparMapas();
+  const nomeUrl = new URLSearchParams(location.search).get('noel') || '';
+  const recados = (X?.interacoes || []).filter((x) => x.tipo === 'recado');
+  $('#conteudo').innerHTML = `
+    <div class="card" style="background:linear-gradient(160deg,#fff8ef,#fde6e8)"><h2>🎅 O Papai Noel quer falar com você!</h2>
+      <div class="noel"><div id="santa">${SANTA}</div>
+        <div><div class="fala" id="fala">${nomeUrl ? `O Papai Noel tem um recado para <b>${esc(nomeLimpo(nomeUrl))}</b>! Toque em <b>Ouvir</b> 🔊` : 'Escreva o nome da criança (ou de quem você quiser) e toque em <b>Ouvir o Papai Noel</b> 🔊'}</div>
+          <div class="form-p" style="margin-top:12px"><label class="inteiro">Nome<input id="noel-nome" maxlength="40" value="${esc(nomeLimpo(nomeUrl))}" placeholder="Ex.: Maria Eduarda"></label></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <button class="btn verm" id="noel-ouvir" style="font-size:16px">🔊 Ouvir o Papai Noel</button>
+            <button class="btn claro" id="noel-outra">🔄 Outra mensagem</button>
+            <button class="btn zap" id="noel-zap">Enviar no WhatsApp</button>
+            <button class="btn claro" id="noel-cartao">🖼️ Baixar cartão</button></div>
+          <p class="dica" style="margin-top:8px">A voz é a do seu celular ou computador. Aumente o volume! O nome digitado não fica salvo.</p></div></div></div>
+    ${X?.participacao ? `<div class="card"><h2>💌 Escreva para o Papai Noel</h2><form class="form-p" id="form-carta">
+      <label>Seu nome *<input name="nome" maxlength="80" required></label><label>Bairro<input name="bairro" maxlength="80"></label>
+      <label class="inteiro">Seu recado<textarea name="texto" maxlength="1200" required placeholder="Querido Papai Noel…"></textarea></label>
+      <input class="hp" name="site" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <label class="inteiro" style="flex-direction:row;align-items:flex-start;gap:8px;font-weight:500"><input type="checkbox" name="autoriza" style="width:auto;margin-top:3px" required> <span>Autorizo publicar o recado e o primeiro nome nesta página (se for de uma criança, sou o responsável).</span></label>
+      <div class="inteiro"><button class="btn verm" style="width:100%">Enviar para o Papai Noel 🎅</button></div></form></div>` : ''}
+    ${recados.length ? `<div class="card"><h2>📬 Recados que o Papai Noel recebeu</h2><div class="depos">${recados.map((x) => `<div class="depo"><div class="c"><b>${esc(x.nome)}</b>${x.bairro ? ` <small class="dica">· ${esc(x.bairro)}</small>` : ''}${x.texto ? `<p style="margin:6px 0 0;white-space:pre-line">${esc(x.texto)}</p>` : ''}${x.resposta ? `<div class="resp">🎅 <b>Papai Noel:</b> ${esc(x.resposta)}</div>` : ''}</div></div>`).join('')}</div></div>` : ''}`;
+  const falar = () => {
+    const nome = $('#noel-nome').value; const txt = textoNoel(nome, fraseIdx);
+    $('#fala').innerHTML = esc(txt).replace(esc(nomeLimpo(nome) || 'meu amigo'), `<b>${esc(nomeLimpo(nome) || 'meu amigo')}</b>`);
+    if (!('speechSynthesis' in window)) { toast('Seu aparelho não tem voz disponível; leia a mensagem 😊'); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(txt.replace(/Ho ho ho!/g, 'Rô, rô, rô!'));
+    u.lang = 'pt-BR'; u.pitch = 0.55; u.rate = 0.88;
+    const v = vozes.find((x) => /male|masc|daniel|ricardo|antonio|felipe/i.test(x.name)) || vozes.find((x) => /pt-BR/i.test(x.lang)) || vozes[0];
+    if (v) u.voice = v;
+    const box = $('#santa');
+    u.onstart = () => box.classList.add('falando');
+    u.onend = u.onerror = () => box.classList.remove('falando');
+    speechSynthesis.speak(u);
+  };
+  $('#noel-ouvir').onclick = falar;
+  $('#noel-outra').onclick = () => { fraseIdx++; falar(); };
+  $('#noel-zap').onclick = () => {
+    const n = nomeLimpo($('#noel-nome').value); if (!n) return toast('Escreva o nome primeiro');
+    const link = `${location.origin}${location.pathname}?c=${encodeURIComponent(slug)}&noel=${encodeURIComponent(n)}#papainoel`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(`🎅 Ho ho ho! O Papai Noel gravou um recado para ${n}! Abra e toque em Ouvir: ${link}`)}`, '_blank', 'noopener');
+  };
+  $('#noel-cartao').onclick = () => baixarCartao(nomeLimpo($('#noel-nome').value), textoNoel($('#noel-nome').value, fraseIdx));
+  const fc = $('#form-carta');
+  if (fc) fc.onsubmit = async (e) => {
+    e.preventDefault(); if (fc.site.value) return;
+    const bt = fc.querySelector('button'); bt.disabled = true;
+    const { error } = await sb.rpc('natal_interagir', { p_slug: slug, p_tipo: 'recado', p_nome: fc.nome.value, p_bairro: fc.bairro.value, p_texto: fc.texto.value, p_nota: null, p_foto_path: null, p_autoriza: fc.autoriza.checked });
+    bt.disabled = false;
+    if (error) return toast(error.message || 'Não foi possível enviar agora');
+    fc.reset(); toast('🎅 Recado enviado! O Papai Noel vai ler com carinho.');
+  };
+}
+function baixarCartao(nome, texto) {
+  const c = document.createElement('canvas'); c.width = 1080; c.height = 1350; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 1350); gr.addColorStop(0, '#b3141f'); gr.addColorStop(1, '#6d0912'); g.fillStyle = gr; g.fillRect(0, 0, 1080, 1350);
+  g.fillStyle = 'rgba(255,255,255,.08)'; for (let i = 0; i < 60; i++) { g.beginPath(); g.arc(Math.random() * 1080, Math.random() * 1350, 2 + Math.random() * 6, 0, 7); g.fill(); }
+  const img = new Image();
+  img.onload = () => {
+    g.drawImage(img, 390, 90, 300, 346);
+    g.fillStyle = '#fff8ef'; g.beginPath(); g.roundRect ? g.roundRect(90, 480, 900, 700, 40) : g.rect(90, 480, 900, 700); g.fill();
+    g.fillStyle = '#b3141f'; g.font = 'bold 54px Georgia, serif'; g.textAlign = 'center'; g.fillText(`Para ${nome || 'você'}`, 540, 570);
+    g.fillStyle = '#2a1215'; g.font = '36px Inter, Arial, sans-serif';
+    const palavras = texto.split(' '); let linha = '', y = 650;
+    for (const p of palavras) { const t = linha ? linha + ' ' + p : p; if (g.measureText(t).width > 800) { g.fillText(linha, 540, y); linha = p; y += 50; } else linha = t; }
+    g.fillText(linha, 540, y);
+    g.fillStyle = '#f2cf6b'; g.font = 'bold 40px Georgia, serif'; g.fillText(`🎄 ${D?.nome || 'Carretinha de Natal'} ${D?.ano || ''}`, 540, 1270);
+    const a = document.createElement('a'); a.download = `recado-papai-noel-${(nome || 'natal').toLowerCase().replace(/\s+/g, '-')}.png`; a.href = c.toDataURL('image/png'); a.click();
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(SANTA.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
+}
+
+// ---------- 🙏 Novena ----------
+function renderNovena() {
+  carrinho(); limparMapas();
+  $('#conteudo').innerHTML = `
+    <div class="card" style="text-align:center"><div style="font-size:40px">🙏⭐</div><h2 style="justify-content:center">Novena de Natal</h2>
+      <p style="margin:0;white-space:pre-line">${esc(M.novena_info || 'Nove noites de oração em preparação para o Natal, visitando as casas da nossa comunidade. Inscreva sua família!')}</p></div>
+    ${M.novena.length ? `<div class="card"><h2>🗓️ As noites</h2>${M.novena.map((n) => `<div class="noite"><div class="n">${n.noite ? n.noite + 'ª' : '★'}<small>${n.data ? dataBR(n.data).slice(0, 5) : 'a definir'}</small></div><div><b>${esc(n.familia || 'Família a definir')}</b>${n.tema ? ` <small class="dica">· ${esc(n.tema)}</small>` : ''}<small class="dica" style="display:block">${[n.data && SEM[new Date(n.data + 'T12:00').getDay()], n.hora && '⏰ ' + n.hora, n.bairro && '📍 ' + n.bairro, n.endereco].filter(Boolean).map(esc).join(' · ')}</small></div></div>`).join('')}</div>` : ''}
+    ${M.novena_ativa ? `<div class="card"><h2>✍️ Inscreva sua família</h2><form class="form-p" id="form-nov">
+      <label>Nome da família *<input name="familia" maxlength="120" required placeholder="Ex.: Família Souza"></label>
+      <label>Responsável *<input name="resp" maxlength="120" required></label>
+      <label>WhatsApp *<input name="tel" type="tel" maxlength="20" required placeholder="(44) 99999-9999"></label>
+      <label>Quantas pessoas?<input name="pessoas" type="number" min="1" max="200"></label>
+      <label class="inteiro">Vocês querem<select name="receber"><option value="true">🏠 Receber uma noite da novena em casa</option><option value="false">🙏 Só participar das noites</option></select></label>
+      <label>Endereço<input name="end" maxlength="160" placeholder="Rua e número"></label><label>Bairro<input name="bairro" maxlength="80"></label>
+      <label class="inteiro">Datas de preferência<input name="datas" maxlength="300" placeholder="Ex.: 18 ou 20 de dezembro"></label>
+      <label class="inteiro">Observações<textarea name="obs" maxlength="800"></textarea></label>
+      <input class="hp" name="site" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <label class="inteiro" style="flex-direction:row;align-items:flex-start;gap:8px;font-weight:500"><input type="checkbox" name="autoriza" style="width:auto;margin-top:3px"> <span>Autorizo divulgar o nome da família e o endereço na programação da novena, caso nossa casa receba uma noite.</span></label>
+      <p class="dica inteiro" style="margin:0">Seus dados ficam só com a equipe da Carretinha, para organizar a novena.</p>
+      <div class="inteiro"><button class="btn verm" style="width:100%;font-size:16px">Inscrever minha família 🙏</button></div></form></div>` : ''}`;
+  const f = $('#form-nov'); if (!f) return;
+  f.onsubmit = async (e) => {
+    e.preventDefault(); if (f.site.value) return;
+    const bt = f.querySelector('button'); bt.disabled = true; bt.textContent = 'Enviando…';
+    const { error } = await sb.rpc('natal_inscrever_novena', { p_slug: slug, p_familia: f.familia.value, p_responsavel: f.resp.value, p_telefone: f.tel.value, p_endereco: f.end.value, p_bairro: f.bairro.value,
+      p_pessoas: f.pessoas.value ? +f.pessoas.value : null, p_quer_receber: f.receber.value === 'true', p_datas: f.datas.value, p_autoriza: f.autoriza.checked, p_obs: f.obs.value });
+    bt.disabled = false; bt.textContent = 'Inscrever minha família 🙏';
+    if (error) return toast(error.message || 'Não foi possível enviar agora');
+    f.reset(); $('#conteudo').insertAdjacentHTML('afterbegin', '<div class="card faixa" style="text-align:center"><b style="color:var(--verde);font-size:17px">🙏 Inscrição recebida! A equipe vai entrar em contato pelo WhatsApp.</b></div>');
+    window.scrollTo({ top: $('#abas').offsetTop, behavior: 'smooth' });
+  };
+}
+
 // Venda online desativada: a página pública só divulga e presta contas (sem escolha de números, carrinho ou PIX).
 function carrinho() { $('#carrinho').classList.add('oculto'); }
 
 carregar();
-setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.lightbox') && document.activeElement?.id !== 'busca' && aba !== 'participe' && aba !== 'onde') carregar(); }, 60000);
+setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.lightbox') && document.activeElement?.id !== 'busca' && !['participe', 'onde', 'papainoel', 'novena'].includes(aba)) carregar(); }, 60000);
 </script>
 </body>
 </html>

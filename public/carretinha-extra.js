@@ -46,15 +46,17 @@ window.carregarExtras = async function () {
 // 🎲 SORTEADOR
 // ============================================================
 let ULTIMO = null;
+const validos = () => (S.sorteios || []).filter((s) => !s.cancelado);
 function concorrentes(criterio, excluir) {
   const st = criterio === 'pagos' ? ['pago'] : ['pago', 'vendido', 'pendente'];
-  const ganhou = new Set((S.sorteios || []).map((s) => s.numero_id));
+  const ganhou = new Set(validos().map((s) => s.numero_id));
   return S.numeros.filter((n) => st.includes(n.status) && (!excluir || !ganhou.has(n.id)));
 }
 function rSorteio() {
   if (!tem007()) { $('#conteudo').innerHTML = SEM_007; return; }
-  const ss = [...S.sorteios].sort((a, b) => a.realizado_em.localeCompare(b.realizado_em));
-  const feitos = new Set(ss.map((s) => s.premio_id));
+  const ss = [...S.sorteios].sort((a, b) => (a.cancelado - b.cancelado) || a.realizado_em.localeCompare(b.realizado_em));
+  const ok = ss.filter((s) => !s.cancelado);
+  const feitos = new Set(ok.map((s) => s.premio_id));
   const premios = [...S.premios].sort((a, b) => (a.ordem_sorteio ?? 999) - (b.ordem_sorteio ?? 999));
   const faltam = premios.filter((p) => !feitos.has(p.id));
   const pagos = concorrentes('pagos', true).length, vend = concorrentes('vendidos', true).length;
@@ -64,7 +66,7 @@ function rSorteio() {
       <div class="kpi destaque"><span>Concorrendo (só pagos)</span><b>${pagos}</b><small>chance de ${pagos ? '1 em ' + pagos : '—'} por número</small></div>
       <div class="kpi o"><span>Concorrendo (todos vendidos)</span><b>${vend}</b><small>inclui não pagos</small></div>
       <div class="kpi"><span>Prêmios a sortear</span><b>${faltam.length}</b><small>de ${premios.length}</small></div>
-      <div class="kpi v"><span>Já sorteados</span><b>${ss.length}</b></div>
+      <div class="kpi v"><span>Já sorteados</span><b>${ok.length}</b>${ss.length > ok.length ? `<small>${ss.length - ok.length} cancelado(s)</small>` : ''}</div>
     </div>
     ${pode('sorteio') ? `<div class="card"><h3>🎲 Realizar sorteio</h3>
       <div class="grade-form" style="margin-top:10px">
@@ -74,21 +76,22 @@ function rSorteio() {
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
         <button class="btn verm" style="font-size:16px;padding:12px 20px" id="so-sortear">🎲 Sortear agora</button>
-        <button class="btn ouro" id="so-globo">✍️ Registrar número tirado no globo</button>
+        <button class="btn ouro" id="so-globo">✍️ Lançar manualmente (número do globo)</button>
         <button class="btn" id="so-telao">📺 Modo telão</button>
       </div>
-      <p class="dica" style="margin-top:8px">O sorteio aleatório é feito no banco de dados e fica registrado com protocolo, data, hora e quem realizou. Para refazer um prêmio, exclua o resultado na lista abaixo.</p>
+      <p class="dica" style="margin-top:8px">O sorteio aleatório é feito no banco de dados e fica registrado com protocolo, data, hora e quem realizou. Para sortear um prêmio de novo, <b>cancele</b> o resultado na lista abaixo (o cancelado fica no histórico).</p>
     </div>` : ''}
     <div id="so-resultado">${ULTIMO ? cardResultado(ULTIMO) : ''}</div>
-    <div class="card"><div class="entre"><h3 style="margin:0">🏆 Ganhadores</h3>${ss.length ? '<button class="btn peq" onclick="copiarGanhadores()">📋 Copiar lista para o WhatsApp</button>' : ''}</div>
-      ${ss.length ? `<div class="tabela-wrap" style="margin-top:10px"><table><thead><tr><th>Prêmio</th><th>Nº</th><th>Ganhador(a)</th><th>Telefone</th><th>Quem vendeu</th><th>Bloquinho</th><th>Situação</th><th>Quando</th><th>Na página</th><th></th></tr></thead><tbody>${ss.map((s) => `<tr>
-        <td><b>${esc(s.premio_nome || '—')}</b></td><td><b style="font-size:16px">${String(s.numero).padStart(2, '0')}</b></td><td>${esc(s.ganhador_nome || '—')}</td>
+    <div class="card"><div class="entre"><h3 style="margin:0">🏆 Ganhadores</h3>${ok.length ? '<button class="btn peq" onclick="copiarGanhadores()">📋 Copiar lista para o WhatsApp</button>' : ''}</div>
+      ${ss.length ? `<div class="tabela-wrap" style="margin-top:10px"><table><thead><tr><th>Prêmio</th><th>Nº</th><th>Ganhador(a)</th><th>Telefone</th><th>Quem vendeu</th><th>Bloquinho</th><th>Situação</th><th>Quando</th><th>Na página</th><th></th></tr></thead><tbody>${ss.map((s) => `<tr${s.cancelado ? ' style="opacity:.55;text-decoration:line-through"' : ''}>
+        <td><b>${esc(s.premio_nome || '—')}</b>${s.cancelado ? `<br><span class="badge b-cinza" style="text-decoration:none;display:inline-block">Cancelado${s.motivo_cancelamento ? ': ' + esc(s.motivo_cancelamento) : ''}</span>` : ''}${s.editado_em ? '<br><small class="dica">editado</small>' : ''}</td><td><b style="font-size:16px">${String(s.numero).padStart(2, '0')}</b></td><td>${esc(s.ganhador_nome || '—')}</td>
         <td>${s.ganhador_telefone ? `<a href="${esc(zapLink(s.ganhador_telefone, `Olá! Aqui é da ${S.config.nome_evento || 'Carretinha de Natal'}. Seu número ${s.numero} foi sorteado e você ganhou: ${s.premio_nome || 'um prêmio'}! 🎄🎁`))}" target="_blank" rel="noopener">${esc(s.ganhador_telefone)}</a>` : '—'}</td>
         <td>${esc(s.vendedor || '—')}</td><td>${s.bloquinho ? pad3(s.bloquinho) : '—'}</td>
-        <td><span class="badge ${s.status_numero === 'pago' ? 'b-verde' : 'b-verm'}">${esc(ST_NUM[s.status_numero] || s.status_numero || '—')}</span><br><small class="dica">${s.modo === 'manual' ? 'globo' : 'sistema'}</small></td>
+        <td><span class="badge ${s.status_numero === 'pago' ? 'b-verde' : 'b-verm'}">${esc(ST_NUM[s.status_numero] || s.status_numero || '—')}</span><br><small class="dica">${{ manual: 'globo', lancado: 'lançado à mão' }[s.modo] || 'sistema'}</small></td>
         <td><small>${dataHoraBR(s.realizado_em)}<br>${esc(s.protocolo)}</small></td>
         <td>${pode('sorteio') ? `<button class="btn peq" onclick="visSorteio('${s.id}',${!s.publico})">${s.publico ? '👁 mostra' : '🙈 oculto'}</button>` : s.publico ? 'sim' : 'não'}</td>
-        <td class="acoes">${pode('sorteio') ? `<button class="btn peq perigo" onclick="excluirSorteio('${s.id}')">Excluir</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
+        <td class="acoes" style="text-decoration:none">${pode('sorteio') ? (s.cancelado ? `<button class="btn peq" onclick="reativarSorteio('${s.id}')">Reativar</button> <button class="btn peq perigo" onclick="excluirSorteio('${s.id}')">Excluir</button>`
+          : `<button class="btn peq" onclick="editarSorteio('${s.id}')">Editar</button> <button class="btn peq perigo" onclick="cancelarSorteio('${s.id}')">Cancelar</button>`) : ''}</td></tr>`).join('')}</tbody></table></div>
         <p class="dica" style="margin-top:8px">Na página pública aparece só o número, o prêmio e o primeiro nome com a inicial do sobrenome (ex.: Ana S.). Telefone e vendedor ficam só para a equipe.</p>` : '<p class="vazio">Nenhum sorteio realizado ainda.</p>'}
     </div>
     ${blocoVendedores()}`;
@@ -105,14 +108,14 @@ function blocoVendedores() {
   if (!vend.length) return '';
   const por = {};
   for (const n of vend) { const v = nomeVendedor(n); const x = (por[v] ||= { v, qtd: 0, pagos: 0, valor: 0, recebido: 0, ganhos: 0 }); x.qtd++; if (n.status === 'pago') x.pagos++; x.valor += Number(n.valor) || 0; x.recebido += Number(n.valor_pago) || 0; }
-  for (const s of S.sorteios || []) { const x = por[s.vendedor]; if (x) x.ganhos++; }
+  for (const s of validos()) { const x = por[s.vendedor]; if (x) x.ganhos++; }
   const lista = Object.values(por).sort((a, b) => b.qtd - a.qtd);
   const tot = vend.length;
   return `<div class="card"><h3>🧮 Quem vendeu — cálculo por vendedor</h3>
     <p class="dica" style="margin:4px 0 10px">Vendedor = quem está no campo “vendedor” do número; se estiver vazio, usa o responsável pelo bloquinho. Chance = parte dos números vendidos.</p>
     <div class="tabela-wrap"><table><thead><tr><th>#</th><th>Vendedor</th><th>Números vendidos</th><th>Pagos</th><th>Valor vendido</th><th>Recebido</th><th>Falta</th><th>% das vendas</th><th>Ganhadores</th></tr></thead><tbody>
     ${lista.map((x, i) => `<tr><td>${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</td><td><b>${esc(x.v)}</b></td><td>${x.qtd}</td><td>${x.pagos}</td><td>${brl(x.valor)}</td><td>${brl(x.recebido)}</td><td>${brl(Math.max(0, x.valor - x.recebido))}</td><td>${((100 * x.qtd) / tot).toFixed(1).replace('.', ',')}%</td><td>${x.ganhos || ''}</td></tr>`).join('')}
-    </tbody><tfoot><tr><td></td><td>Total</td><td>${tot}</td><td>${soma(lista, 'pagos')}</td><td>${brl(soma(lista, 'valor'))}</td><td>${brl(soma(lista, 'recebido'))}</td><td>${brl(Math.max(0, soma(lista, 'valor') - soma(lista, 'recebido')))}</td><td>100%</td><td>${(S.sorteios || []).length || ''}</td></tr></tfoot></table></div></div>`;
+    </tbody><tfoot><tr><td></td><td>Total</td><td>${tot}</td><td>${soma(lista, 'pagos')}</td><td>${brl(soma(lista, 'valor'))}</td><td>${brl(soma(lista, 'recebido'))}</td><td>${brl(Math.max(0, soma(lista, 'valor') - soma(lista, 'recebido')))}</td><td>100%</td><td>${validos().length || ''}</td></tr></tfoot></table></div></div>`;
 }
 
 function cardResultado(s) {
@@ -133,7 +136,7 @@ function cardResultado(s) {
 }
 const primeiroNome = (n) => { const p = String(n || '').trim().split(/\s+/); return p[0] ? p[0] + (p.length > 1 ? ' ' + p[p.length - 1][0].toUpperCase() + '.' : '') : ''; };
 const textoResultado = (s) => `🎄 ${S.config.nome_evento || 'Carretinha de Natal'} ${S.config.ano}\n🏆 ${s.premio_nome || 'Sorteio'}\n🎟️ Número sorteado: ${String(s.numero).padStart(2, '0')}\n🎉 Ganhador(a): ${primeiroNome(s.ganhador_nome) || '—'}\nParabéns!`;
-window.copiarGanhadores = () => copiarTexto(`🎄 ${S.config.nome_evento || 'Carretinha de Natal'} ${S.config.ano} — GANHADORES\n\n` + [...S.sorteios].sort((a, b) => a.realizado_em.localeCompare(b.realizado_em)).map((s) => `🏆 ${s.premio_nome || 'Prêmio'} — nº ${String(s.numero).padStart(2, '0')} — ${primeiroNome(s.ganhador_nome)}`).join('\n') + '\n\nObrigado a todos que ajudaram! ❤️');
+window.copiarGanhadores = () => copiarTexto(`🎄 ${S.config.nome_evento || 'Carretinha de Natal'} ${S.config.ano} — GANHADORES\n\n` + validos().sort((a, b) => a.realizado_em.localeCompare(b.realizado_em)).map((s) => `🏆 ${s.premio_nome || 'Prêmio'} — nº ${String(s.numero).padStart(2, '0')} — ${primeiroNome(s.ganhador_nome)}`).join('\n') + '\n\nObrigado a todos que ajudaram! ❤️');
 
 async function sortear(telao) {
   const premio = $('#so-premio').value || null, crit = $('#so-crit').value, exc = $('#so-exc').checked;
@@ -192,39 +195,81 @@ function animacao(elNum, elTxt, fechar, final) {
   };
 }
 
-function registrarGlobo() {
-  const premio = $('#so-premio').value || null, crit = $('#so-crit').value, exc = $('#so-exc').checked;
-  const pNome = premio ? S.premios.find((p) => p.id === premio)?.nome : 'Sorteio';
+// Formulário de ganhador: usado para LANÇAR manualmente e para EDITAR um resultado
+function formGanhador(sorteio) {
+  const premioSel = sorteio ? sorteio.premio_id : ($('#so-premio')?.value || null);
+  const usados = new Set(validos().filter((x) => x.id !== sorteio?.id).map((x) => x.premio_id));
+  const premios = [...S.premios].sort((a, b) => (a.ordem_sorteio ?? 999) - (b.ordem_sorteio ?? 999)).filter((p) => !usados.has(p.id));
+  const v = sorteio || {};
   const m = abrirModal({
-    titulo: `✍️ Número tirado no globo · ${esc(pNome)}`,
-    corpo: `<label class="form" style="display:block"><span class="dica">Digite o número que saiu</span><input id="gl-num" inputmode="numeric" style="font-size:28px;font-weight:800;text-align:center;margin-top:6px" autofocus></label><div id="gl-prev" style="margin-top:12px"></div>`,
-    rodape: '<button class="btn" data-c>Cancelar</button><button class="btn prim" data-ok disabled>Registrar resultado</button>',
+    titulo: sorteio ? `Editar resultado · ${esc(sorteio.premio_nome || 'Sorteio')}` : '✍️ Lançar ganhador manualmente', largo: true,
+    corpo: `<form class="form" id="fg"><div class="grade-form">
+      <label class="inteiro">Prêmio<select name="premio">${premios.map((p) => `<option value="${p.id}"${p.id === premioSel ? ' selected' : ''}>${p.ordem_sorteio ? p.ordem_sorteio + 'º · ' : ''}${esc(p.nome)}</option>`).join('')}<option value=""${!premioSel ? ' selected' : ''}>Sem prêmio específico</option></select></label>
+      <label>Número sorteado *<input name="numero" inputmode="numeric" value="${esc(v.numero ?? '')}" style="font-size:22px;font-weight:800" required></label>
+      <label>Ganhador(a)<input name="nome" value="${esc(v.ganhador_nome || '')}"></label>
+      <label>Telefone<input name="tel" type="tel" value="${esc(v.ganhador_telefone || '')}"></label>
+      <label>Quem vendeu<input name="vend" list="fg-vend" value="${esc(v.vendedor || '')}"><datalist id="fg-vend">${[...new Set(vendidos().map(nomeVendedor))].map((x) => `<option value="${esc(x)}">`).join('')}</datalist></label>
+      ${sorteio ? `<label>Mostrar na página pública<select name="publico"><option value="true"${v.publico !== false ? ' selected' : ''}>Sim</option><option value="false"${v.publico === false ? ' selected' : ''}>Não</option></select></label>` : ''}
+      <label class="inteiro">Observação<input name="obs" value="${esc(v.observacoes || '')}"></label>
+    </div><div id="fg-prev" style="margin-top:4px"></div><div class="erro-box oculto" id="fg-erro"></div></form>`,
+    rodape: `<button class="btn" data-c>Cancelar</button><button class="btn prim" data-ok>${sorteio ? 'Salvar alterações' : 'Registrar ganhador'}</button>`,
   });
-  const inp = m.fundo.querySelector('#gl-num'), prev = m.fundo.querySelector('#gl-prev'), ok = m.fundo.querySelector('[data-ok]');
+  const f = m.fundo.querySelector('#fg'), prev = m.fundo.querySelector('#fg-prev'), err = m.fundo.querySelector('#fg-erro');
   m.fundo.querySelector('[data-c]').onclick = m.fechar;
-  inp.oninput = () => {
-    const v = parseInt(inp.value.replace(/\D/g, ''), 10);
-    const n = S.numeros.find((x) => x.numero === v);
-    ok.disabled = !n;
-    if (!inp.value) { prev.innerHTML = ''; return; }
-    if (!n) { prev.innerHTML = '<div class="erro-box">Esse número não existe na rifa.</div>'; return; }
-    const ganhou = (S.sorteios || []).find((s) => s.numero_id === n.id);
-    const valido = (crit === 'pagos' ? ['pago'] : ['pago', 'vendido', 'pendente']).includes(n.status);
-    prev.innerHTML = `<div class="${valido && !(exc && ganhou) ? 'ok-box' : 'erro-box'}"><b>Nº ${String(n.numero).padStart(2, '0')}</b> · ${esc(n.comprador_nome || 'sem comprador')} ${n.comprador_telefone ? '· ' + esc(n.comprador_telefone) : ''}<br>Vendido por <b>${esc(nomeVendedor(n))}</b> · Bloquinho ${pad3(S.bloqPorId[n.bloquinho_id]?.numero || 0)} · <b>${esc(ST_NUM[n.status])}</b>
-      ${!valido ? `<br>⚠️ Este número está <b>${esc(ST_NUM[n.status])}</b> e não concorre pelo critério escolhido. Confira antes de registrar.` : ''}${exc && ganhou ? `<br>⚠️ Este número já ganhou: ${esc(ganhou.premio_nome || '')}.` : ''}</div>`;
+  // ao digitar o número, preenche com os dados da rifa (tudo continua editável)
+  let ultimoNum = String(v.numero ?? '');
+  const olhar = (preencher) => {
+    const nv = parseInt(f.numero.value.replace(/\D/g, ''), 10);
+    const n = S.numeros.find((x) => x.numero === nv);
+    if (!f.numero.value) { prev.innerHTML = ''; return; }
+    if (!n) { prev.innerHTML = '<div class="erro-box">Este número não está na rifa. Você pode registrar assim mesmo, preenchendo os dados à mão.</div>'; return; }
+    if (preencher) { f.nome.value = n.comprador_nome || ''; f.tel.value = n.comprador_telefone || ''; f.vend.value = nomeVendedor(n); }
+    const ganhou = validos().find((s) => s.numero_id === n.id && s.id !== sorteio?.id);
+    prev.innerHTML = `<div class="${n.status === 'pago' && !ganhou ? 'ok-box' : 'erro-box'}">Na rifa: <b>${esc(n.comprador_nome || 'sem comprador')}</b> · Bloquinho ${pad3(S.bloqPorId[n.bloquinho_id]?.numero || 0)} · <b>${esc(ST_NUM[n.status])}</b>${n.status !== 'pago' ? ' — atenção: número não está pago' : ''}${ganhou ? `<br>⚠️ Este número já ganhou: ${esc(ganhou.premio_nome || '')}` : ''}</div>`;
   };
-  ok.onclick = async () => {
-    ok.disabled = true;
+  f.numero.oninput = () => { const atual = f.numero.value.replace(/\D/g, ''); olhar(atual !== ultimoNum); ultimoNum = atual; };
+  olhar(false);
+  m.fundo.querySelector('[data-ok]').onclick = async (e) => {
+    e.preventDefault(); err.classList.add('oculto');
+    const numero = parseInt(f.numero.value.replace(/\D/g, ''), 10);
+    if (!numero) { err.textContent = 'Informe o número sorteado.'; err.classList.remove('oculto'); return; }
+    const bt = e.currentTarget; bt.disabled = true;
     try {
-      const { data, error } = await sb.rpc('natal_sortear', { p_premio: premio, p_criterio: crit, p_numero: parseInt(inp.value.replace(/\D/g, ''), 10), p_excluir_ganhadores: exc, p_obs: null });
-      if (error) throw error;
-      m.fechar(); ULTIMO = data; await recarregar(false); toast('Resultado registrado');
-    } catch (e) { ok.disabled = false; toast(msgErro(e), true); }
+      if (sorteio) {
+        await gravar('natal_sorteios', sorteio.id, { premio_id: f.premio.value || null, numero, ganhador_nome: f.nome.value.trim() || null, ganhador_telefone: f.tel.value.trim() || null,
+          vendedor: f.vend.value.trim() || null, observacoes: f.obs.value.trim() || null, publico: f.publico.value !== 'false' });
+        if (ULTIMO?.id === sorteio.id) ULTIMO = null;
+      } else {
+        const { data, error } = await sb.rpc('natal_lancar_sorteio', { p_premio: f.premio.value || null, p_numero: numero, p_nome: f.nome.value, p_telefone: f.tel.value, p_vendedor: f.vend.value, p_obs: f.obs.value || null });
+        if (error) throw error; ULTIMO = data;
+      }
+      m.fechar(); await recarregar(false); toast(sorteio ? 'Resultado atualizado' : 'Ganhador registrado');
+    } catch (e2) { bt.disabled = false; err.textContent = msgErro(e2); err.classList.remove('oculto'); }
   };
 }
+function registrarGlobo() { formGanhador(null); }
+window.editarSorteio = (id) => formGanhador(S.sorteios.find((x) => x.id === id));
+window.cancelarSorteio = (id) => {
+  const s = S.sorteios.find((x) => x.id === id);
+  const m = abrirModal({
+    titulo: `Cancelar resultado · ${esc(s.premio_nome || 'Sorteio')} · nº ${String(s.numero).padStart(2, '0')}`,
+    corpo: `<p style="margin:0 0 10px">O resultado sai da página pública e o prêmio volta para <b>a sortear</b>. O registro cancelado continua no histórico.</p>
+      <label class="form" style="display:block"><span class="dica">Motivo do cancelamento</span><input id="cx-motivo" placeholder="Ex.: número não estava pago, ganhador não encontrado…" style="margin-top:6px"></label>`,
+    rodape: '<button class="btn" data-c>Voltar</button><button class="btn verm" data-ok>Cancelar resultado</button>',
+  });
+  m.fundo.querySelector('[data-c]').onclick = m.fechar;
+  m.fundo.querySelector('[data-ok]').onclick = async () => {
+    try { await gravar('natal_sorteios', id, { cancelado: true, motivo_cancelamento: m.fundo.querySelector('#cx-motivo').value.trim() || null }); if (ULTIMO?.id === id) ULTIMO = null; m.fechar(); await recarregar(false); toast('Resultado cancelado. O prêmio pode ser sorteado de novo.'); }
+    catch (e) { toast(msgErro(e), true); }
+  };
+};
+window.reativarSorteio = async (id) => {
+  try { await gravar('natal_sorteios', id, { cancelado: false }); await recarregar(false); toast('Resultado reativado'); }
+  catch (e) { toast(/duplicate|unique/i.test(e?.message || '') ? 'Este prêmio já tem outro ganhador. Cancele o outro antes de reativar.' : msgErro(e), true); }
+};
 window.excluirSorteio = async (id) => {
-  if (!(await confirmar('Excluir este resultado? O prêmio volta para a lista de “a sortear”.', 'Excluir'))) return;
-  try { await apagar('natal_sorteios', id); if (ULTIMO?.id === id) ULTIMO = null; await recarregar(false); toast('Resultado excluído'); } catch (e) { toast(msgErro(e), true); }
+  if (!(await confirmar('Excluir de vez este resultado cancelado? Ele some do histórico.', 'Excluir'))) return;
+  try { await apagar('natal_sorteios', id); await recarregar(false); toast('Resultado excluído'); } catch (e) { toast(msgErro(e), true); }
 };
 window.visSorteio = async (id, v) => { try { await gravar('natal_sorteios', id, { publico: v }); await recarregar(false); } catch (e) { toast(msgErro(e), true); } };
 
