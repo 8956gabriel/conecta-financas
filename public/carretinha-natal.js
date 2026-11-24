@@ -93,7 +93,7 @@ let charts = [];
 
 const pode = (area) => {
   if (PAPEL === 'admin') return true;
-  if (PAPEL === 'financeiro') return ['despesas', 'produtos', 'premios', 'bloquinhos', 'numeros', 'pagamentos', 'receitas', 'pessoas', 'entregas', 'agenda', 'escala', 'extrato', 'divulgacao'].includes(area);
+  if (PAPEL === 'financeiro') return ['despesas', 'produtos', 'premios', 'bloquinhos', 'numeros', 'pagamentos', 'receitas', 'pessoas', 'entregas', 'agenda', 'escala', 'extrato', 'divulgacao', 'sorteio'].includes(area);
   if (PAPEL === 'bloquinhos') return ['bloquinhos', 'numeros', 'pagamentos', 'pessoas'].includes(area);
   return false;
 };
@@ -266,6 +266,7 @@ async function carregar() {
   S.pagsPorNum = {};
   for (const p of pagamentos) if (p.numero_id) (S.pagsPorNum[p.numero_id] ||= []).push(p);
   $('#marca-ano').textContent = (S.config.nome_evento && S.config.nome_evento !== 'Carretinha de Natal' ? S.config.nome_evento + ' · ' : '') + 'Edição ' + S.config.ano;
+  if (window.carregarExtras) await window.carregarExtras();
   if (S.chatOk) ligarRealtimeChat();
   $('#topo-sync').textContent = '● Atualizado ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
@@ -2378,4 +2379,6 @@ function listaCaixa() {
     : '<p class="vazio">Nenhuma movimentação com esses filtros.</p>';
 }
 
-iniciar().catch((e) => { console.error(e); $('#sem-acesso-msg').textContent = 'Erro ao iniciar: ' + msgErro(e); mostrarTela('tela-sem-acesso'); });
+// inicia depois que todos os scripts da página (inclusive carretinha-extra.js) forem carregados
+const _iniciar = () => iniciar().catch((e) => { console.error(e); $('#sem-acesso-msg').textContent = 'Erro ao iniciar: ' + msgErro(e); mostrarTela('tela-sem-acesso'); });
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _iniciar); else _iniciar();

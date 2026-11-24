@@ -10,6 +10,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -244,6 +246,7 @@ tfoot td{font-weight:700;background:#faf7ef}
   .kpi b{font-size:18px}
 }
 @media print{.lateral,.topo .acoes,.btn,.filtros{display:none!important}#conteudo{padding:0}}
+.leaflet-container{z-index:0;isolation:isolate;font:inherit}
 </style>
 </head>
 <body>
@@ -318,5 +321,6 @@ tfoot td{font-weight:700;background:#faf7ef}
 
 <div id="modais"></div>
 <script src="/carretinha-natal.js"></script>
+<script src="/carretinha-extra.js"></script>
 </body>
 </html>
