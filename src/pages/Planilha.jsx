@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useApp } from '../store'
 import { supabase, erroMsg } from '../supabase'
 import { brl, dataBR, hojeISO, mesISO, nomeMes, num } from '../lib'
@@ -8,17 +8,38 @@ import Acoes from '../components/Acoes'
 import Modal from '../components/Modal'
 
 // Planilha do mês: tudo que entrou e saiu, com os depósitos (reservas/metas) calculados à parte.
-export default function Planilha({ irPara }) {
+export default function Planilha({ irPara, separada = false }) {
   const app = useApp()
+  // Planilha 2: dados próprios na tabela planilha_itens
+  const [itens, setItens] = useState(separada ? null : [])
+  const [erroTab, setErroTab] = useState(null)
+  const carregarItens = useCallback(async () => {
+    if (!separada) return
+    const { data, error } = await supabase.from('planilha_itens').select('*').eq('planilha', 'planilha2')
+      .order('data').order('created_at').limit(20000)
+    if (error) { setErroTab(erroMsg(error)); setItens([]) } else { setErroTab(null); setItens(data) }
+  }, [separada])
+  useEffect(() => { carregarItens() }, [carregarItens])
+  const [editarItem, setEditarItem] = useState(null)
   const [mes, setMes] = useState(mesISO())
   const [tipo, setTipo] = useState('todos') // todos | entrada | saida | deposito
   const [categoria, setCategoria] = useState('')
   const [busca, setBusca] = useState('')
   const [soPagos, setSoPagos] = useState(false)
   const [editar, setEditar] = useState(null)
-  const [excluirDep, setExcluirDep] = useState(null)
+  const [excluirDep, setExcluirDep] = useState(null) // depósito (app) ou item (planilha 2)
 
   const linhas = useMemo(() => {
+    if (separada) {
+      return (itens || [])
+        .filter(app.filtra)
+        .filter((i) => i.data.startsWith(mes))
+        .map((i) => ({
+          id: i.id, origem: 'item', i, data: i.data, criado: i.created_at, tipo: i.tipo,
+          descricao: i.descricao || (i.tipo === 'deposito' ? 'Depósito' : '—'),
+          categoria_id: i.categoria_id, obs: i.observacao || '', valor: Number(i.valor), user_id: i.user_id,
+        }))
+    }
     const lancs = app.lancamentos
       .filter(app.filtra)
       .filter((l) => l.data.startsWith(mes))
@@ -41,7 +62,7 @@ export default function Planilha({ irPara }) {
         }
       })
     return [...lancs, ...deps].sort((a, b) => a.data.localeCompare(b.data) || (a.criado || '').localeCompare(b.criado || ''))
-  }, [app.lancamentos, app.movimentos, app.metas, app.filtra, mes, soPagos])
+  }, [separada, itens, app.lancamentos, app.movimentos, app.metas, app.filtra, mes, soPagos])
 
   // Totais do mês (sem filtros de busca/tipo, para o resumo ser sempre o mês inteiro)
   const tot = useMemo(() => {
@@ -90,6 +111,13 @@ export default function Planilha({ irPara }) {
   }, [linhas, app])
 
   async function salvarCampo(r, campo, valor) {
+    if (r.origem === 'item') {
+      const upd = campo === 'obs' ? { observacao: valor.trim() || null } : { categoria_id: valor || null }
+      const { error } = await supabase.from('planilha_itens').update(upd).eq('id', r.id)
+      if (error) return app.avisar(erroMsg(error), 'erro')
+      await carregarItens()
+      return app.avisar('Salvo')
+    }
     if (r.origem === 'lanc') {
       const upd = campo === 'obs' ? { observacao: valor.trim() || null } : { categoria_id: valor || null }
       const { error } = await supabase.from('lancamentos').update(upd).eq('id', r.id)
@@ -105,6 +133,13 @@ export default function Planilha({ irPara }) {
   async function confirmarExcluirDep() {
     const r = excluirDep
     try {
+      if (r.origem === 'item') {
+        const { error } = await supabase.from('planilha_itens').delete().eq('id', r.id)
+        if (error) throw error
+        await carregarItens()
+        app.avisar('Linha excluída')
+        return
+      }
       const meta = app.metas.find((x) => x.id === r.m.meta_id)
       if (meta) {
         const novo = Number(meta.valor_atual) - Number(r.m.valor)
@@ -128,7 +163,7 @@ export default function Planilha({ irPara }) {
     const f = (n) => (n ? n.toFixed(2).replace('.', ',') : '')
     const q = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`
     const rows = comSaldo.map((r) => [
-      dataBR(r.data), NOME_TIPO[r.tipo], r.descricao, r.origem === 'lanc' ? app.cat(r.categoria_id)?.nome || '' : '',
+      dataBR(r.data), NOME_TIPO[r.tipo], r.descricao, r.origem !== 'dep' ? app.cat(r.categoria_id)?.nome || '' : '',
       r.obs, app.nomeMembro(r.user_id),
       r.tipo === 'entrada' ? f(r.valor) : '', r.tipo === 'saida' ? f(r.valor) : '', r.tipo === 'deposito' ? f(r.valor) : '',
       f(r.saldo) || '0,00',
@@ -137,15 +172,24 @@ export default function Planilha({ irPara }) {
     const csv = '﻿' + [cab, ...rows].map((l) => l.map(q).join(';')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    a.download = `planilha-${mes}.csv`
+    a.download = `${separada ? 'planilha2' : 'planilha'}-${mes}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
   }
 
   const temFiltro = tipo !== 'todos' || categoria || busca
 
+  if (separada && itens === null) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
+  if (separada && erroTab) return (
+    <div className="card aviso erro">
+      A Planilha 2 ainda não está pronta no banco de dados ({erroTab}). Rode o arquivo <b>supabase/010_planilha2.sql</b> no SQL Editor do Supabase e recarregue.
+      <div className="acoes" style={{ marginTop: 10 }}><button className="btn" onClick={carregarItens}>Tentar de novo</button></div>
+    </div>
+  )
+
   return (
     <div className="pagina">
+      {separada && <p className="dica destaque">📒 <b>Planilha 2</b> — separada: o que você lança aqui não mistura com os lançamentos do app nem com a Planilha 1.</p>}
       <SeletorMes mes={mes} setMes={setMes} />
 
       <div className="kpis">
@@ -159,10 +203,10 @@ export default function Planilha({ irPara }) {
       </div>
       <p className="dica destaque">
         Sobra depois dos depósitos: <b className={tot.saldo - tot.depLiq < 0 ? 'txt-vermelho' : 'txt-verde'}>{brl(tot.saldo - tot.depLiq)}</b>
-        {' '}— é o saldo do mês menos o que foi guardado nas reservas e metas.
+        {' '}— é o saldo do mês menos o que foi depositado.
       </p>
 
-      <NovaLinha mes={mes} irPara={irPara} />
+      <NovaLinha mes={mes} irPara={irPara} separada={separada} aoSalvar={carregarItens} />
 
       <div className="filtros card">
         <input placeholder="Buscar na descrição ou observação…" value={busca} onChange={(e) => setBusca(e.target.value)} />
@@ -176,7 +220,7 @@ export default function Planilha({ irPara }) {
           <option value="">Todas as categorias</option>
           {app.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome} ({c.tipo})</option>)}
         </select>
-        <label className="check pequeno-txt"><input type="checkbox" checked={soPagos} onChange={(e) => setSoPagos(e.target.checked)} /> Só pago / recebido</label>
+        {separada ? <span /> : <label className="check pequeno-txt"><input type="checkbox" checked={soPagos} onChange={(e) => setSoPagos(e.target.checked)} /> Só pago / recebido</label>}
         <div className="acoes">
           {temFiltro && <button className="link" onClick={() => { setTipo('todos'); setCategoria(''); setBusca('') }}>Limpar filtros</button>}
           <button className="btn" onClick={exportarCSV} disabled={!comSaldo.length}>⬇ Exportar (Excel/CSV)</button>
@@ -205,12 +249,12 @@ export default function Planilha({ irPara }) {
                     <small className="resp"><i className="dot" style={{ background: app.corMembro(r.user_id) }} />{app.nomeMembro(r.user_id).split(' ')[0]}</small>
                   </td>
                   <td>
-                    {r.origem === 'lanc' ? (
+                    {r.tipo !== 'deposito' ? (
                       <select className="cel" value={r.categoria_id || ''} onChange={(e) => salvarCampo(r, 'categoria', e.target.value)}>
                         <option value="">Sem categoria</option>
-                        {app.categorias.filter((c) => c.tipo === r.l.tipo).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                        {app.categorias.filter((c) => c.tipo === (r.tipo === 'entrada' ? 'receita' : 'despesa')).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                       </select>
-                    ) : <span className="pequeno-txt">Reserva / meta</span>}
+                    ) : <span className="pequeno-txt">{r.origem === 'dep' ? 'Reserva / meta' : 'Depósito'}</span>}
                   </td>
                   <td className="col-obs"><CelulaTexto valor={r.obs} salvar={(v) => salvarCampo(r, 'obs', v)} /></td>
                   <td className="num txt-verde">{r.tipo === 'entrada' ? brl(r.valor) : ''}</td>
@@ -220,7 +264,9 @@ export default function Planilha({ irPara }) {
                   <td>
                     {r.origem === 'lanc'
                       ? <Acoes editar={() => setEditar(r.l)} excluir={() => setEditar({ ...r.l, _x: true })} />
-                      : <Acoes excluir={() => setExcluirDep(r)} />}
+                      : r.origem === 'item'
+                        ? <Acoes editar={() => setEditarItem(r.i)} excluir={() => setExcluirDep(r)} />
+                        : <Acoes excluir={() => setExcluirDep(r)} />}
                   </td>
                 </tr>
               ))}
@@ -239,7 +285,7 @@ export default function Planilha({ irPara }) {
             )}
           </table>
         </div>
-        <p className="dica">Toque na observação ou na categoria para mudar direto na planilha. Os depósitos nas reservas e metas não entram no saldo: são somados na coluna própria.</p>
+        <p className="dica">Toque na observação ou na categoria para mudar direto na planilha. Os depósitos não entram no saldo: são somados na coluna própria.</p>
       </section>
 
       <section className="card">
@@ -260,10 +306,11 @@ export default function Planilha({ irPara }) {
       </section>
 
       {editar && <NovoLancamento editar={editar} fechar={() => setEditar(null)} />}
+      {editarItem && <EditarItem item={editarItem} fechar={() => setEditarItem(null)} aoSalvar={carregarItens} />}
       {excluirDep && (
-        <Modal titulo="Excluir depósito" fechar={() => setExcluirDep(null)}>
+        <Modal titulo={excluirDep.origem === 'item' ? 'Excluir linha' : 'Excluir depósito'} fechar={() => setExcluirDep(null)}>
           <div className="confirma">
-            <p>Excluir “{excluirDep.descricao}” de {brl(excluirDep.valor)}? O saldo da reserva também é ajustado.</p>
+            <p>Excluir “{excluirDep.descricao}” de {brl(excluirDep.valor)}?{excluirDep.origem === 'dep' ? ' O saldo da reserva também é ajustado.' : ' Não dá para desfazer.'}</p>
             <div className="acoes">
               <button className="btn perigo" onClick={confirmarExcluirDep}>Excluir</button>
               <button className="btn" onClick={() => setExcluirDep(null)}>Cancelar</button>
@@ -290,7 +337,7 @@ function CelulaTexto({ valor, salvar }) {
 }
 
 // Linha rápida para lançar direto na planilha
-function NovaLinha({ mes, irPara }) {
+function NovaLinha({ mes, irPara, separada, aoSalvar }) {
   const app = useApp()
   const dataPadrao = () => (mes === mesISO() ? hojeISO() : `${mes}-01`)
   const [tipo, setTipo] = useState('saida')
@@ -317,7 +364,15 @@ function NovaLinha({ mes, irPara }) {
     if (!data) return app.avisar('Informe a data.', 'erro')
     setSalvando(true)
     try {
-      if (tipo === 'deposito') {
+      if (separada) {
+        if (tipo !== 'deposito' && !descricao.trim()) throw new Error('Informe a descrição.')
+        const { error } = await supabase.from('planilha_itens').insert({
+          casal_id: app.casal.id, user_id: resp, planilha: 'planilha2', tipo, data, descricao: descricao.trim(),
+          categoria_id: tipo === 'deposito' ? null : categoria || null, observacao: obs.trim() || null, valor: v,
+        })
+        if (error) throw error
+        await aoSalvar()
+      } else if (tipo === 'deposito') {
         if (!metaSel) throw new Error('Crie uma reserva ou meta primeiro (aba Reservas e metas).')
         const desc = [descricao.trim(), obs.trim()].filter(Boolean).join(' — ')
         const { error } = await supabase.rpc('movimentar_meta', { p_meta_id: metaSel, p_valor: v, p_descricao: desc || 'Depósito', p_data: data })
@@ -330,7 +385,7 @@ function NovaLinha({ mes, irPara }) {
         })
         if (error) throw error
       }
-      await app.carregar()
+      if (!separada) await app.carregar()
       app.avisar(tipo === 'entrada' ? 'Entrada lançada' : tipo === 'saida' ? 'Saída lançada' : 'Depósito lançado')
       setDescricao(''); setObs(''); setValor('')
     } catch (err) {
@@ -349,7 +404,9 @@ function NovaLinha({ mes, irPara }) {
       </div>
       <input type="date" value={data} onChange={(e) => setData(e.target.value)} aria-label="Data" />
       <input placeholder={tipo === 'deposito' ? 'Descrição (opcional)' : 'Descrição'} value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-      {tipo === 'deposito' ? (
+      {tipo === 'deposito' && separada ? (
+        <span className="pequeno-txt">Depósito (calculado à parte)</span>
+      ) : tipo === 'deposito' ? (
         app.metas.length ? (
           <select value={metaSel} onChange={(e) => setMeta(e.target.value)} aria-label="Reserva">
             {app.metas.map((m) => <option key={m.id} value={m.id}>{m.icone} {m.nome}</option>)}
@@ -365,5 +422,69 @@ function NovaLinha({ mes, irPara }) {
       <input inputMode="decimal" placeholder="Valor R$" value={valor} onChange={(e) => setValor(e.target.value)} />
       <button className="btn primario" disabled={salvando}>{salvando ? 'Salvando…' : '+ Adicionar'}</button>
     </form>
+  )
+}
+
+// Editar uma linha da Planilha 2
+function EditarItem({ item, fechar, aoSalvar }) {
+  const app = useApp()
+  const [tipo, setTipo] = useState(item.tipo)
+  const [data, setData] = useState(item.data)
+  const [descricao, setDescricao] = useState(item.descricao || '')
+  const [categoria, setCategoria] = useState(item.categoria_id || '')
+  const [obs, setObs] = useState(item.observacao || '')
+  const [valor, setValor] = useState(String(item.valor).replace('.', ','))
+  const [resp, setResp] = useState(item.user_id)
+  const [erro, setErro] = useState(null)
+  const [salvando, setSalvando] = useState(false)
+  const cats = app.categorias.filter((c) => c.tipo === (tipo === 'entrada' ? 'receita' : 'despesa'))
+
+  async function salvar(e) {
+    e.preventDefault()
+    const v = num(valor)
+    if (!(v > 0)) return setErro('Informe um valor maior que zero.')
+    setSalvando(true)
+    const { error } = await supabase.from('planilha_itens').update({
+      tipo, data, descricao: descricao.trim(), categoria_id: tipo === 'deposito' ? null : categoria || null,
+      observacao: obs.trim() || null, valor: v, user_id: resp,
+    }).eq('id', item.id)
+    setSalvando(false)
+    if (error) return setErro(erroMsg(error))
+    await aoSalvar()
+    app.avisar('Linha atualizada')
+    fechar()
+  }
+
+  return (
+    <Modal titulo="Editar linha · Planilha 2" fechar={fechar}>
+      <form className="form" onSubmit={salvar}>
+        <div className="seg full">
+          <button type="button" className={tipo === 'entrada' ? 'on receita' : ''} onClick={() => { setTipo('entrada'); setCategoria('') }}>↑ Entrada</button>
+          <button type="button" className={tipo === 'saida' ? 'on despesa' : ''} onClick={() => { setTipo('saida'); setCategoria('') }}>↓ Saída</button>
+          <button type="button" className={tipo === 'deposito' ? 'on deposito' : ''} onClick={() => setTipo('deposito')}>◆ Depósito</button>
+        </div>
+        <div className="linha2">
+          <label>Data<input type="date" value={data} onChange={(e) => setData(e.target.value)} /></label>
+          <label>Valor (R$)<input inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} /></label>
+        </div>
+        <label>Descrição<input value={descricao} onChange={(e) => setDescricao(e.target.value)} /></label>
+        {tipo !== 'deposito' && (
+          <label>Categoria
+            <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+              <option value="">Sem categoria</option>
+              {cats.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </label>
+        )}
+        <label>Observação (o que gastou)<input value={obs} onChange={(e) => setObs(e.target.value)} /></label>
+        <label>Responsável
+          <select value={resp} onChange={(e) => setResp(e.target.value)}>
+            {app.membros.map((m) => <option key={m.user_id} value={m.user_id}>{m.nome}</option>)}
+          </select>
+        </label>
+        {erro && <div className="aviso erro">{erro}</div>}
+        <button className="btn primario grande" disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar'}</button>
+      </form>
+    </Modal>
   )
 }
