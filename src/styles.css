@@ -287,3 +287,42 @@ button.badge { cursor: pointer; }
 .fatura-itens li { align-items: center; }
 
 .mini.lancar { margin-top: 8px; padding: 6px 10px; font-weight: 600; background: #ffffff33; }
+
+/* Planilha (entradas, saídas e depósitos) */
+.txt-roxo { color: #c4b5fd; }
+.nova-linha { display: grid; grid-template-columns: auto 150px 1.2fr 1fr 1.6fr 120px auto; gap: 8px; padding: 12px; align-items: center; }
+.seg button.on.deposito { background: #8b5cf633; color: #ddd6fe; }
+.planilha-card { padding: 6px; }
+.planilha-card .dica { padding: 8px 10px 6px; }
+.planilha-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table.planilha { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.planilha th { text-align: left; font-size: 12px; font-weight: 600; color: var(--txt2); text-transform: uppercase; letter-spacing: .03em; padding: 10px 8px; border-bottom: 1px solid var(--borda2); white-space: nowrap; position: sticky; top: 0; background: var(--card); }
+.planilha td { padding: 6px 8px; border-bottom: 1px solid #1e293b88; vertical-align: middle; }
+.planilha tbody tr:hover { background: #ffffff05; }
+.planilha .num { text-align: right; white-space: nowrap; }
+.planilha .nowrap { white-space: nowrap; }
+.planilha .col-desc { min-width: 160px; max-width: 260px; }
+.planilha .col-desc .resp { display: block; font-size: 11.5px; color: var(--txt3); }
+.planilha .col-obs { min-width: 200px; }
+.planilha tfoot td { font-weight: 700; border-top: 2px solid var(--borda2); border-bottom: none; padding: 10px 8px; }
+.planilha tr.tp-deposito { background: #8b5cf60d; }
+.planilha .cel { background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; font-size: 13.5px; }
+.planilha .cel:hover { border-color: var(--borda2); }
+.planilha .cel:focus { background: var(--bg2); border-color: var(--pri); }
+.planilha select.cel { min-width: 130px; }
+.planilha .acoes-item { margin: 0; }
+.planilha.resumo td { padding: 8px; }
+.tp-badge-entrada { background: #10b98126; color: #6ee7b7; border-color: #10b98144; }
+.tp-badge-saida { background: #f43f5e26; color: #fda4af; border-color: #f43f5e44; }
+.tp-badge-deposito { background: #8b5cf626; color: #c4b5fd; border-color: #8b5cf644; }
+@media (max-width: 1100px) {
+  .nova-linha { grid-template-columns: 1fr 1fr; }
+  .nova-linha .tipo-planilha { grid-column: 1 / -1; display: flex; }
+  .nova-linha .tipo-planilha button { flex: 1; }
+  .nova-linha > .btn.primario { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .planilha { font-size: 12.5px; }
+  .planilha .col-obs { min-width: 160px; }
+}
+.credito { text-align: center; color: var(--txt3); font-size: 12px; margin-top: 28px; }

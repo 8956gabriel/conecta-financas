@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Lancamentos from './pages/Lancamentos'
+import Planilha from './pages/Planilha'
 import Diario from './pages/Diario'
 import Cartoes from './pages/Cartoes'
 import Contas from './pages/Contas'
@@ -35,6 +36,7 @@ export default function App() {
 const ABAS = [
   { id: 'inicio', nome: 'Início', icone: '◧' },
   { id: 'lancamentos', nome: 'Lançamentos', curto: 'Lançam.', icone: '☰' },
+  { id: 'planilha', nome: 'Planilha', icone: '▤' },
   { id: 'diario', nome: 'Despesa diária', curto: 'Diário', icone: '▦' },
   { id: 'cartoes', nome: 'Cartões', icone: '▭' },
   { id: 'contas', nome: 'Contas', icone: '◎' },
@@ -59,7 +61,7 @@ function Shell() {
     )
   if (app.semCasal) return <Onboarding />
 
-  const Pagina = { inicio: Dashboard, lancamentos: Lancamentos, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
+  const Pagina = { inicio: Dashboard, lancamentos: Lancamentos, planilha: Planilha, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
 
   return (
     <div className="shell">
@@ -93,6 +95,7 @@ function Shell() {
           </div>
         </header>
         <Pagina abrirNovo={setNovo} irPara={setAba} />
+        <footer className="credito">Desenvolvedor: Gabriel Oliveira</footer>
       </main>
 
       <nav className="tabbar">
