@@ -6,6 +6,7 @@ import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Lancamentos from './pages/Lancamentos'
 import Planilha from './pages/Planilha'
+import Agenda, { AGENDAS } from './pages/Agenda'
 import Diario from './pages/Diario'
 import Cartoes from './pages/Cartoes'
 import Contas from './pages/Contas'
@@ -42,6 +43,9 @@ const PLANILHAS_EXTRA = [
 const Planilha2 = (props) => <Planilha {...props} separada="planilha2" />
 const Planilha3 = (props) => <Planilha {...props} separada="planilha3" />
 const Planilha4 = (props) => <Planilha {...props} separada="planilha4" />
+// Agendas (calendário): Prefeitura, Pessoal, Igreja — cada uma com seu botão
+const AGENDAS_MENU = Object.entries(AGENDAS).map(([k, a]) => ({ id: 'agenda-' + k, chave: k, ...a }))
+const PAGINAS_AGENDA = Object.fromEntries(AGENDAS_MENU.map((a) => [a.id, (props) => <Agenda {...props} agenda={a.chave} />]))
 
 const ABAS = [
   { id: 'inicio', nome: 'Início', icone: '◧' },
@@ -71,7 +75,7 @@ function Shell() {
     )
   if (app.semCasal) return <Onboarding />
 
-  const Pagina = { planilha2: Planilha2, planilha3: Planilha3, planilha4: Planilha4, inicio: Dashboard, lancamentos: Lancamentos, planilha: Planilha, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
+  const Pagina = { ...PAGINAS_AGENDA, planilha2: Planilha2, planilha3: Planilha3, planilha4: Planilha4, inicio: Dashboard, lancamentos: Lancamentos, planilha: Planilha, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
 
   return (
     <div className="shell">
@@ -89,13 +93,21 @@ function Shell() {
             <span className="ic">{p.icone}</span><span>{p.nome.toUpperCase()}<small>Separada, com dados próprios</small></span>
           </button>
         ))}
+        <div className="menu-titulo">Agendas</div>
+        <div className="agenda-btns">
+          {AGENDAS_MENU.map((a) => (
+            <button key={a.id} className={'agenda-btn' + (aba === a.id ? ' ativo' : '')} style={{ '--c': a.cor }} onClick={() => setAba(a.id)}>
+              <span>{a.icone}</span>{a.curto}
+            </button>
+          ))}
+        </div>
         <a className="natal-btn" href="/carretinha.html"><span className="ic">🎄</span><span>CARRETINHA DE NATAL<small>Rifas, despesas e prestação de contas</small></span></a>
         <div className="casal-tag">{app.casal?.nome}</div>
       </aside>
 
       <main className="conteudo">
         <header className="topo">
-          <h1>{PLANILHAS_EXTRA.find((p) => p.id === aba)?.nome || ABAS.find((a) => a.id === aba)?.nome}</h1>
+          <h1>{AGENDAS_MENU.find((a) => a.id === aba)?.nome || PLANILHAS_EXTRA.find((p) => p.id === aba)?.nome || ABAS.find((a) => a.id === aba)?.nome}</h1>
           <div className="topo-acoes">
             <div className="seg visao" title="Visão">
               <button className={app.visao === 'casal' ? 'on' : ''} onClick={() => app.setVisao('casal')}>Casal</button>
@@ -105,9 +117,14 @@ function Shell() {
                 </button>
               ))}
             </div>
-            {PLANILHAS_EXTRA.map((p) => (
-              <button key={p.id} className={'planilha2-chip so-mobile ' + p.id + (aba === p.id ? ' ativo' : '')} onClick={() => setAba(p.id)}>{p.icone} {p.nome}</button>
-            ))}
+            <div className="atalhos so-mobile">
+              {PLANILHAS_EXTRA.map((p) => (
+                <button key={p.id} className={'planilha2-chip ' + p.id + (aba === p.id ? ' ativo' : '')} onClick={() => setAba(p.id)}>{p.icone} {p.nome}</button>
+              ))}
+              {AGENDAS_MENU.map((a) => (
+                <button key={a.id} className={'agenda-chip' + (aba === a.id ? ' ativo' : '')} style={{ '--c': a.cor }} onClick={() => setAba(a.id)}>{a.icone} {a.curto}</button>
+              ))}
+            </div>
             <a className="natal-chip so-mobile" href="/carretinha.html">🎄 Carretinha</a>
             <button className="btn primario so-desktop" onClick={() => setNovo('despesa')}>+ Novo lançamento</button>
           </div>

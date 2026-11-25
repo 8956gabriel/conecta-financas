@@ -347,3 +347,40 @@ table.planilha { width: 100%; border-collapse: collapse; font-size: 13.5px; font
 .planilha2-chip.planilha3 { border-color: #10b98166; background: linear-gradient(135deg, #10b98133, #14b8a633); color: #d1fae5; }
 .planilha2-chip.planilha4 { border-color: #f9731666; background: linear-gradient(135deg, #f9731633, #f59e0b33); color: #ffedd5; }
 @media (max-width: 760px) { .planilha2-chip.so-mobile { flex: 1 1 30%; padding: 8px 6px; font-size: 12.5px; } .natal-chip.so-mobile { flex: 1 1 100%; } }
+
+/* Agendas (Prefeitura, Pessoal, Igreja) */
+.menu-titulo { margin: 16px 12px 6px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--txt3); }
+.agenda-btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin: 0 4px; }
+.agenda-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); background: color-mix(in srgb, var(--c) 14%, transparent); color: var(--txt); font-weight: 700; font-size: 11.5px; cursor: pointer; }
+.agenda-btn span { font-size: 18px; }
+.agenda-btn:hover { filter: brightness(1.2); }
+.agenda-btn.ativo { border-color: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 35%, transparent); }
+.agenda-chip { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 999px; font-weight: 700; font-size: 12.5px; color: var(--txt); border: 1px solid color-mix(in srgb, var(--c) 50%, transparent); background: color-mix(in srgb, var(--c) 20%, transparent); cursor: pointer; white-space: nowrap; }
+.agenda-chip.ativo { border-color: var(--c); }
+.atalhos { display: none; }
+@media (max-width: 760px) {
+  .atalhos.so-mobile { display: flex; gap: 6px; overflow-x: auto; width: 100%; padding-bottom: 2px; scrollbar-width: none; }
+  .atalhos .planilha2-chip { display: inline-flex; flex: none; white-space: nowrap; }
+}
+.ag-novo { display: grid; grid-template-columns: 2fr 150px 110px 1fr 1fr 1.2fr auto; gap: 8px; padding: 12px; align-items: center; }
+.ag-novo .ag-dica { grid-column: 1 / -1; font-size: 12px; }
+.ag-cal .dia small { font-size: 9.5px; color: #e2e8f0; white-space: nowrap; overflow: hidden; max-width: 100%; }
+.ag-cal .dia.tem-atraso { border-color: #f43f5e; }
+.ag-lista > li.ag-item { cursor: default; align-items: flex-start; }
+.ag-item .info { cursor: pointer; }
+.ag-item .info b { white-space: normal; }
+.ag-item .info small { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; white-space: normal; margin-top: 3px; }
+.ag-item .ag-obs { color: var(--txt3); display: block; }
+.ag-check { width: 26px; height: 26px; flex: none; border-radius: 8px; border: 2px solid var(--borda2); background: var(--bg2); color: #6ee7b7; font-weight: 800; cursor: pointer; display: grid; place-items: center; margin-top: 2px; }
+.ag-check:hover { border-color: #10b981; }
+.ag-item.feito .ag-check { background: #10b98133; border-color: #10b981; }
+.ag-item.feito .info b { text-decoration: line-through; color: var(--txt3); }
+.ag-item.cancelado { opacity: .5; }
+.ag-item.atrasado .ag-check { border-color: #f43f5e; }
+.ag-hora { display: inline-block; font-variant-numeric: tabular-nums; color: #a5b4fc; margin-right: 8px; font-weight: 700; }
+.ag-cat { border: 1px solid; border-radius: 999px; padding: 1px 8px; font-size: 11px; font-weight: 700; }
+.cab-dia.ag-hoje { background: #0ea5e922; }
+@media (max-width: 1100px) {
+  .ag-novo { grid-template-columns: 1fr 1fr; }
+  .ag-novo .ag-titulo, .ag-novo > .btn.primario { grid-column: 1 / -1; }
+}
