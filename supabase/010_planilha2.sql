@@ -1,4 +1,4 @@
--- Planilha 2: planilha separada (entradas, saídas e depósitos) com dados próprios,
+-- Planilhas 2, 3 e 4 (separadas) (entradas, saídas e depósitos) com dados próprios,
 -- que não se misturam com os lançamentos do app. A coluna "planilha" permite criar outras no futuro.
 create table if not exists public.planilha_itens (
   id uuid primary key default gen_random_uuid(),

@@ -33,7 +33,15 @@ export default function App() {
   )
 }
 
-const Planilha2 = (props) => <Planilha {...props} separada />
+// Planilhas separadas (dados próprios), cada uma com seu botão
+const PLANILHAS_EXTRA = [
+  { id: 'planilha2', nome: 'Planilha 2', icone: '📒' },
+  { id: 'planilha3', nome: 'Planilha 3', icone: '📗' },
+  { id: 'planilha4', nome: 'Planilha 4', icone: '📙' },
+]
+const Planilha2 = (props) => <Planilha {...props} separada="planilha2" />
+const Planilha3 = (props) => <Planilha {...props} separada="planilha3" />
+const Planilha4 = (props) => <Planilha {...props} separada="planilha4" />
 
 const ABAS = [
   { id: 'inicio', nome: 'Início', icone: '◧' },
@@ -63,7 +71,7 @@ function Shell() {
     )
   if (app.semCasal) return <Onboarding />
 
-  const Pagina = { planilha2: Planilha2, inicio: Dashboard, lancamentos: Lancamentos, planilha: Planilha, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
+  const Pagina = { planilha2: Planilha2, planilha3: Planilha3, planilha4: Planilha4, inicio: Dashboard, lancamentos: Lancamentos, planilha: Planilha, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
 
   return (
     <div className="shell">
@@ -76,16 +84,18 @@ function Shell() {
             </button>
           ))}
         </nav>
-        <button className={'planilha2-btn' + (aba === 'planilha2' ? ' ativo' : '')} onClick={() => setAba('planilha2')}>
-          <span className="ic">📒</span><span>PLANILHA 2<small>Planilha separada, com dados próprios</small></span>
-        </button>
+        {PLANILHAS_EXTRA.map((p) => (
+          <button key={p.id} className={'planilha2-btn ' + p.id + (aba === p.id ? ' ativo' : '')} onClick={() => setAba(p.id)}>
+            <span className="ic">{p.icone}</span><span>{p.nome.toUpperCase()}<small>Separada, com dados próprios</small></span>
+          </button>
+        ))}
         <a className="natal-btn" href="/carretinha.html"><span className="ic">🎄</span><span>CARRETINHA DE NATAL<small>Rifas, despesas e prestação de contas</small></span></a>
         <div className="casal-tag">{app.casal?.nome}</div>
       </aside>
 
       <main className="conteudo">
         <header className="topo">
-          <h1>{aba === 'planilha2' ? 'Planilha 2' : ABAS.find((a) => a.id === aba)?.nome}</h1>
+          <h1>{PLANILHAS_EXTRA.find((p) => p.id === aba)?.nome || ABAS.find((a) => a.id === aba)?.nome}</h1>
           <div className="topo-acoes">
             <div className="seg visao" title="Visão">
               <button className={app.visao === 'casal' ? 'on' : ''} onClick={() => app.setVisao('casal')}>Casal</button>
@@ -95,7 +105,9 @@ function Shell() {
                 </button>
               ))}
             </div>
-            <button className={'planilha2-chip so-mobile' + (aba === 'planilha2' ? ' ativo' : '')} onClick={() => setAba('planilha2')}>📒 Planilha 2</button>
+            {PLANILHAS_EXTRA.map((p) => (
+              <button key={p.id} className={'planilha2-chip so-mobile ' + p.id + (aba === p.id ? ' ativo' : '')} onClick={() => setAba(p.id)}>{p.icone} {p.nome}</button>
+            ))}
             <a className="natal-chip so-mobile" href="/carretinha.html">🎄 Carretinha</a>
             <button className="btn primario so-desktop" onClick={() => setNovo('despesa')}>+ Novo lançamento</button>
           </div>

@@ -8,14 +8,16 @@ import Acoes from '../components/Acoes'
 import Modal from '../components/Modal'
 
 // Planilha do mês: tudo que entrou e saiu, com os depósitos (reservas/metas) calculados à parte.
+// separada = chave da planilha independente ('planilha2', 'planilha3', 'planilha4') ou false para a Planilha 1
 export default function Planilha({ irPara, separada = false }) {
   const app = useApp()
-  // Planilha 2: dados próprios na tabela planilha_itens
+  const nomePl = separada ? 'Planilha ' + separada.replace('planilha', '') : 'Planilha'
+  // Planilhas separadas: dados próprios na tabela planilha_itens
   const [itens, setItens] = useState(separada ? null : [])
   const [erroTab, setErroTab] = useState(null)
   const carregarItens = useCallback(async () => {
     if (!separada) return
-    const { data, error } = await supabase.from('planilha_itens').select('*').eq('planilha', 'planilha2')
+    const { data, error } = await supabase.from('planilha_itens').select('*').eq('planilha', separada)
       .order('data').order('created_at').limit(20000)
     if (error) { setErroTab(erroMsg(error)); setItens([]) } else { setErroTab(null); setItens(data) }
   }, [separada])
@@ -172,7 +174,7 @@ export default function Planilha({ irPara, separada = false }) {
     const csv = '﻿' + [cab, ...rows].map((l) => l.map(q).join(';')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    a.download = `${separada ? 'planilha2' : 'planilha'}-${mes}.csv`
+    a.download = `${separada || 'planilha'}-${mes}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -182,14 +184,14 @@ export default function Planilha({ irPara, separada = false }) {
   if (separada && itens === null) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
   if (separada && erroTab) return (
     <div className="card aviso erro">
-      A Planilha 2 ainda não está pronta no banco de dados ({erroTab}). Rode o arquivo <b>supabase/010_planilha2.sql</b> no SQL Editor do Supabase e recarregue.
+      A {nomePl} ainda não está pronta no banco de dados ({erroTab}). Rode o arquivo <b>supabase/010_planilha2.sql</b> no SQL Editor do Supabase e recarregue.
       <div className="acoes" style={{ marginTop: 10 }}><button className="btn" onClick={carregarItens}>Tentar de novo</button></div>
     </div>
   )
 
   return (
     <div className="pagina">
-      {separada && <p className="dica destaque">📒 <b>Planilha 2</b> — separada: o que você lança aqui não mistura com os lançamentos do app nem com a Planilha 1.</p>}
+      {separada && <p className="dica destaque">📒 <b>{nomePl}</b> — separada: o que você lança aqui não mistura com os lançamentos do app nem com as outras planilhas.</p>}
       <SeletorMes mes={mes} setMes={setMes} />
 
       <div className="kpis">
@@ -367,7 +369,7 @@ function NovaLinha({ mes, irPara, separada, aoSalvar }) {
       if (separada) {
         if (tipo !== 'deposito' && !descricao.trim()) throw new Error('Informe a descrição.')
         const { error } = await supabase.from('planilha_itens').insert({
-          casal_id: app.casal.id, user_id: resp, planilha: 'planilha2', tipo, data, descricao: descricao.trim(),
+          casal_id: app.casal.id, user_id: resp, planilha: separada, tipo, data, descricao: descricao.trim(),
           categoria_id: tipo === 'deposito' ? null : categoria || null, observacao: obs.trim() || null, valor: v,
         })
         if (error) throw error
@@ -425,7 +427,7 @@ function NovaLinha({ mes, irPara, separada, aoSalvar }) {
   )
 }
 
-// Editar uma linha da Planilha 2
+// Editar uma linha de uma planilha separada
 function EditarItem({ item, fechar, aoSalvar }) {
   const app = useApp()
   const [tipo, setTipo] = useState(item.tipo)
@@ -456,7 +458,7 @@ function EditarItem({ item, fechar, aoSalvar }) {
   }
 
   return (
-    <Modal titulo="Editar linha · Planilha 2" fechar={fechar}>
+    <Modal titulo={'Editar linha · Planilha ' + item.planilha.replace('planilha', '')} fechar={fechar}>
       <form className="form" onSubmit={salvar}>
         <div className="seg full">
           <button type="button" className={tipo === 'entrada' ? 'on receita' : ''} onClick={() => { setTipo('entrada'); setCategoria('') }}>↑ Entrada</button>
