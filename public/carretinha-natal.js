@@ -1776,12 +1776,16 @@ window.formFoto = formFoto;
 // ============================================================
 const ST_EXT = { pendente: 'Sem vínculo', vinculado: 'Vinculado aos números', ignorado: 'Já incluído no acerto' };
 const ST_EXT_COR = { pendente: 'b-ouro', vinculado: 'b-verde', ignorado: 'b-cinza' };
-F.extrato = { sit: '', vend: '', q: '' };
+F.extrato = { sit: '', vend: '', q: '', agrupar: false };
+// Vendedor agrupado sem diferenciar maiúsculas/acentos ("Marcão" = "marcao"); '-' = sem vendedor
+const vendKey = (x) => (normNome(x.vendedor || '') ? chave(x.vendedor) : '-');
+function nomesVendedores(ex) {
+  const m = {};
+  for (const x of ex) { const k = vendKey(x); if (k !== '-' && !m[k]) m[k] = normNome(x.vendedor); }
+  return m; // chave -> nome para mostrar
+}
 function montarExtrato() {
   const ex = S.extrato || [];
-  const vend = [...new Set(ex.map((x) => normNome(x.vendedor || '')).filter(Boolean))].sort();
-  const porVend = {};
-  for (const x of ex) { const k = normNome(x.vendedor || '') || '(sem vendedor)'; porVend[k] ||= { v: 0, n: 0, q: 0 }; porVend[k].v += Number(x.valor); porVend[k].n++; porVend[k].q += Number(x.qtd_numeros) || 0; }
   const f = F.extrato;
   return `<div class="kpis" style="margin-top:12px">
       <div class="kpi a"><span>Total no extrato</span><b>${brl(soma(ex.filter((x) => x.situacao !== 'ignorado'), 'valor'))}</b><small>${ex.length} PIX</small></div>
@@ -1789,26 +1793,77 @@ function montarExtrato() {
       <div class="kpi"><span>Vinculados a números</span><b>${brl(soma(ex.filter((x) => x.situacao === 'vinculado'), 'valor'))}</b></div>
       <div class="kpi"><span>Já incluídos no acerto</span><b>${brl(soma(ex.filter((x) => x.situacao === 'ignorado'), 'valor'))}</b></div></div>
     <p class="dica" style="margin:10px 0">O extrato é a lista de PIX que caíram na conta. Para não contar duas vezes, ele <b>não entra no saldo</b> até ser <b>vinculado aos números</b> (o sistema marca os números como vendidos e registra o pagamento) ou marcado como <b>já incluído no acerto</b> de um bloquinho.</p>
-    <div class="card" style="margin-bottom:12px"><h3>Por vendedor</h3><div class="cat-cards">${Object.entries(porVend).sort((a, b) => b[1].v - a[1].v).map(([k, v]) => `<div><small>${esc(k)}</small><b>${brl(v.v)}</b><small>${v.n} PIX · ${v.q} números</small></div>`).join('')}</div></div>
     <div class="entre"><div class="filtros">
-      <input type="search" id="fe-q" placeholder="Buscar nome…" value="${esc(f.q)}">
+      <input type="search" id="fe-q" placeholder="Buscar nome, vendedor ou observação…" value="${esc(f.q)}">
       <select id="fe-sit"><option value="">Todas as situações</option>${Object.entries(ST_EXT).map(([k, v]) => `<option value="${k}"${f.sit === k ? ' selected' : ''}>${v}</option>`).join('')}</select>
-      <select id="fe-vend"><option value="">Todos os vendedores</option><option value="-"${f.vend === '-' ? ' selected' : ''}>(sem vendedor)</option>${vend.map((v) => `<option${f.vend === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>
+      <select id="fe-vend"></select>
+      <label class="dica" style="display:flex;align-items:center;gap:6px;white-space:nowrap"><input type="checkbox" id="fe-agrupar"${f.agrupar ? ' checked' : ''}> Separar por vendedor</label>
     </div>${pode('extrato') ? '<button class="btn prim" onclick="formExtrato()">+ Lançar PIX</button>' : ''}</div>
+    <div id="ext-vend" style="margin-top:12px"></div>
     <div id="ext-lista" style="margin-top:10px"></div>`;
 }
+window.filtrarVendExtrato = (k) => { F.extrato.vend = F.extrato.vend === k ? '' : k; listaExtrato(); };
 function listaExtrato() {
-  const f = F.extrato, q = (f.q || '').toLowerCase();
-  const qi = $('#fe-q'); if (qi && !qi.oninput) { qi.oninput = (e) => { f.q = e.target.value; listaExtrato(); }; $('#fe-sit').onchange = (e) => { f.sit = e.target.value; listaExtrato(); }; $('#fe-vend').onchange = (e) => { f.vend = e.target.value; listaExtrato(); }; }
-  const lista = (S.extrato || []).filter((x) => (!f.sit || x.situacao === f.sit) && (!f.vend || (f.vend === '-' ? !x.vendedor : normNome(x.vendedor || '') === f.vend)) && (!q || x.nome.toLowerCase().includes(q)))
+  const f = F.extrato, q = chave(f.q || '');
+  const qi = $('#fe-q');
+  if (qi && !qi.oninput) {
+    qi.oninput = (e) => { f.q = e.target.value; listaExtrato(); };
+    $('#fe-sit').onchange = (e) => { f.sit = e.target.value; listaExtrato(); };
+    $('#fe-vend').onchange = (e) => { f.vend = e.target.value; listaExtrato(); };
+    $('#fe-agrupar').onchange = (e) => { f.agrupar = e.target.checked; listaExtrato(); };
+  }
+  const ex = S.extrato || [];
+  const nomes = nomesVendedores(ex);
+  const nomeV = (k) => (k === '-' ? '(sem vendedor)' : nomes[k] || k);
+  // filtro de vendedor sempre com todos os vendedores atuais (inclui quem foi editado agora)
+  const sel = $('#fe-vend');
+  if (sel) {
+    if (f.vend && f.vend !== '-' && !nomes[f.vend]) f.vend = '';
+    sel.innerHTML = `<option value="">Todos os vendedores</option><option value="-"${f.vend === '-' ? ' selected' : ''}>(sem vendedor)</option>${Object.entries(nomes).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR')).map(([k, n]) => `<option value="${esc(k)}"${f.vend === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}`;
+  }
+  const casaBusca = (x) => !q || chave(x.nome).includes(q) || chave(x.vendedor || '').includes(q) || chave(x.observacoes || '').includes(q);
+  // base para o resumo por vendedor: busca + situação (sem o filtro de vendedor, para comparar todos)
+  const base = ex.filter((x) => (!f.sit || x.situacao === f.sit) && casaBusca(x));
+  const lista = base.filter((x) => !f.vend || vendKey(x) === f.vend)
     .sort((a, b) => (a.data || '').localeCompare(b.data || '') || a.criado_em.localeCompare(b.criado_em));
+
+  // ----- Resumo por vendedor (soma quantidade de PIX, números e valor) -----
+  const porV = {};
+  for (const x of base) {
+    const k = vendKey(x);
+    const r = (porV[k] ||= { k, n: 0, q: 0, v: 0, pend: 0, vinc: 0, ign: 0, pendN: 0 });
+    const val = Number(x.valor) || 0;
+    r.n++; r.q += Number(x.qtd_numeros) || 0; r.v += val;
+    if (x.situacao === 'pendente') { r.pend += val; r.pendN++; } else if (x.situacao === 'vinculado') r.vinc += val; else r.ign += val;
+  }
+  const linhasV = Object.values(porV).sort((a, b) => b.v - a.v);
+  const tot = linhasV.reduce((t, r) => ({ n: t.n + r.n, q: t.q + r.q, v: t.v + r.v, pend: t.pend + r.pend, vinc: t.vinc + r.vinc, ign: t.ign + r.ign, pendN: t.pendN + r.pendN }), { n: 0, q: 0, v: 0, pend: 0, vinc: 0, ign: 0, pendN: 0 });
+  const bv = $('#ext-vend');
+  if (bv) bv.innerHTML = linhasV.length ? `<div class="card"><div class="entre"><h3 style="margin:0">Por vendedor${f.q || f.sit ? ' <small class="dica">(com a busca/situação escolhida)</small>' : ''}</h3><small class="dica">Clique num vendedor para ver só os PIX dele</small></div>
+    <div class="tabela-wrap" style="margin-top:8px"><table><thead><tr><th>Vendedor</th><th class="num">PIX</th><th class="num">Números</th><th class="num">Valor total</th><th class="num">Sem vínculo</th><th class="num">Vinculado</th><th class="num">Já no acerto</th><th class="num">% do total</th></tr></thead><tbody>
+    ${linhasV.map((r) => `<tr style="cursor:pointer${f.vend === r.k ? ';background:#fdf3d6' : ''}" onclick="filtrarVendExtrato('${esc(r.k).replace(/'/g, "\\'")}')">
+      <td><b>${esc(nomeV(r.k))}</b>${f.vend === r.k ? ' <span class="badge b-verde">filtrando</span>' : ''}</td><td class="num">${r.n}</td><td class="num">${r.q}</td><td class="num"><b>${brl(r.v)}</b></td>
+      <td class="num">${r.pend ? `${brl(r.pend)} <small class="dica">(${r.pendN})</small>` : '—'}</td><td class="num">${r.vinc ? brl(r.vinc) : '—'}</td><td class="num">${r.ign ? brl(r.ign) : '—'}</td>
+      <td class="num">${tot.v ? Math.round((r.v / tot.v) * 100) : 0}%</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>Total · ${linhasV.length} vendedor(es)</td><td class="num">${tot.n}</td><td class="num">${tot.q}</td><td class="num">${brl(tot.v)}</td><td class="num">${brl(tot.pend)}</td><td class="num">${brl(tot.vinc)}</td><td class="num">${brl(tot.ign)}</td><td class="num">100%</td></tr></tfoot></table></div></div>` : '';
+
   const box = $('#ext-lista'); if (!box) return;
-  box.innerHTML = lista.length ? `<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Nome</th><th class="num">Valor</th><th class="num">Números</th><th>Vendedor</th><th>Situação</th><th></th></tr></thead><tbody>${lista.map((x) => `<tr>
+  if (!lista.length) { box.innerHTML = '<div class="card vazio">Nenhum PIX encontrado com esses filtros.</div>'; return; }
+  const linha = (x) => `<tr>
     <td>${x.data ? dataBR(x.data) : '<span class="badge b-verm">sem data</span>'}</td><td><b>${esc(x.nome)}</b>${x.observacoes ? `<br><small class="dica">${esc(x.observacoes)}</small>` : ''}</td>
     <td class="num">${brl(x.valor)}</td><td class="num">${x.qtd_numeros ?? '—'}${x.numeros_vinculados ? `<br><small class="dica">nº ${esc(x.numeros_vinculados)}</small>` : ''}</td><td>${esc(x.vendedor || '')}</td>
     <td><span class="badge ${ST_EXT_COR[x.situacao]}">${ST_EXT[x.situacao]}</span></td>
-    <td class="acoes">${pode('extrato') ? `${x.situacao === 'pendente' ? `<button class="btn peq prim" onclick="vincularExtrato('${x.id}')">Vincular</button> <button class="btn peq" onclick="marcarExtrato('${x.id}','ignorado')" title="O valor já está no acerto de algum bloquinho">Já no acerto</button>` : x.situacao === 'ignorado' ? `<button class="btn peq" onclick="marcarExtrato('${x.id}','pendente')">Desfazer</button>` : ''} <button class="btn peq" onclick="formExtrato(S.extrato.find(e=>e.id==='${x.id}'))">Editar</button>` : ''}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td colspan="2">${lista.length} PIX</td><td class="num">${brl(soma(lista, 'valor'))}</td><td class="num">${soma(lista, (x) => x.qtd_numeros || 0)}</td><td colspan="3"></td></tr></tfoot></table></div>` : '<div class="card vazio">Nenhum PIX no extrato. Importe a planilha em Configurações ou lance manualmente.</div>';
+    <td class="acoes">${pode('extrato') ? `${x.situacao === 'pendente' ? `<button class="btn peq prim" onclick="vincularExtrato('${x.id}')">Vincular</button> <button class="btn peq" onclick="marcarExtrato('${x.id}','ignorado')" title="O valor já está no acerto de algum bloquinho">Já no acerto</button>` : x.situacao === 'ignorado' ? `<button class="btn peq" onclick="marcarExtrato('${x.id}','pendente')">Desfazer</button>` : ''} <button class="btn peq" onclick="formExtrato(S.extrato.find(e=>e.id==='${x.id}'))">Editar</button>` : ''}</td></tr>`;
+  const subtotal = (l, rot) => `<tr style="background:#f5efe0;font-weight:700"><td colspan="2">${rot} · ${l.length} PIX</td><td class="num">${brl(soma(l, 'valor'))}</td><td class="num">${soma(l, (x) => x.qtd_numeros || 0)}</td><td colspan="3"></td></tr>`;
+  let corpo;
+  if (f.agrupar) {
+    const grupos = {};
+    for (const x of lista) (grupos[vendKey(x)] ||= []).push(x);
+    corpo = Object.entries(grupos).sort((a, b) => soma(b[1], 'valor') - soma(a[1], 'valor'))
+      .map(([k, l]) => `<tr><td colspan="7" style="background:#1f5130;color:#fff;font-weight:700">👤 ${esc(nomeV(k))}</td></tr>${l.map(linha).join('')}${subtotal(l, 'Subtotal ' + esc(nomeV(k)))}`).join('');
+  } else corpo = lista.map(linha).join('');
+  box.innerHTML = `<div class="tabela-wrap"><table><thead><tr><th>Data</th><th>Nome</th><th class="num">Valor</th><th class="num">Números</th><th>Vendedor</th><th>Situação</th><th></th></tr></thead><tbody>${corpo}</tbody>
+    <tfoot><tr><td colspan="2">Total${f.vend ? ' de ' + esc(nomeV(f.vend)) : ''}: ${lista.length} PIX</td><td class="num">${brl(soma(lista, 'valor'))}</td><td class="num">${soma(lista, (x) => x.qtd_numeros || 0)}</td><td colspan="3"></td></tr></tfoot></table></div>`;
 }
 function formExtrato(x) {
   abrirForm({
