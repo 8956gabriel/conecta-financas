@@ -6,7 +6,8 @@ import Onboarding from './pages/Onboarding'
 import Dashboard from './pages/Dashboard'
 import Lancamentos from './pages/Lancamentos'
 import Planilha from './pages/Planilha'
-import Agenda, { AGENDAS } from './pages/Agenda'
+import Agenda, { AGENDAS, GERAL } from './pages/Agenda'
+import Retrospectiva from './pages/Retrospectiva'
 import Diario from './pages/Diario'
 import Cartoes from './pages/Cartoes'
 import Contas from './pages/Contas'
@@ -44,7 +45,7 @@ const Planilha2 = (props) => <Planilha {...props} separada="planilha2" />
 const Planilha3 = (props) => <Planilha {...props} separada="planilha3" />
 const Planilha4 = (props) => <Planilha {...props} separada="planilha4" />
 // Agendas (calendário): Prefeitura, Pessoal, Igreja — cada uma com seu botão
-const AGENDAS_MENU = Object.entries(AGENDAS).map(([k, a]) => ({ id: 'agenda-' + k, chave: k, ...a }))
+const AGENDAS_MENU = [['geral', GERAL], ...Object.entries(AGENDAS)].map(([k, a]) => ({ id: 'agenda-' + k, chave: k, ...a }))
 const PAGINAS_AGENDA = Object.fromEntries(AGENDAS_MENU.map((a) => [a.id, (props) => <Agenda {...props} agenda={a.chave} />]))
 
 const ABAS = [
@@ -75,7 +76,7 @@ function Shell() {
     )
   if (app.semCasal) return <Onboarding />
 
-  const Pagina = { ...PAGINAS_AGENDA, planilha2: Planilha2, planilha3: Planilha3, planilha4: Planilha4, inicio: Dashboard, lancamentos: Lancamentos, planilha: Planilha, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
+  const Pagina = { ...PAGINAS_AGENDA, 'agenda-retro': Retrospectiva, planilha2: Planilha2, planilha3: Planilha3, planilha4: Planilha4, inicio: Dashboard, lancamentos: Lancamentos, planilha: Planilha, diario: Diario, cartoes: Cartoes, contas: Contas, metas: Metas, ajustes: Ajustes }[aba] || Dashboard
 
   return (
     <div className="shell">
@@ -100,6 +101,9 @@ function Shell() {
               <span>{a.icone}</span>{a.curto}
             </button>
           ))}
+          <button className={'agenda-btn' + (aba === 'agenda-retro' ? ' ativo' : '')} style={{ '--c': '#10b981' }} onClick={() => setAba('agenda-retro')}>
+            <span>📊</span>Retrosp.
+          </button>
         </div>
         <a className="natal-btn" href="/carretinha.html"><span className="ic">🎄</span><span>CARRETINHA DE NATAL<small>Rifas, despesas e prestação de contas</small></span></a>
         <div className="casal-tag">{app.casal?.nome}</div>
@@ -107,7 +111,7 @@ function Shell() {
 
       <main className="conteudo">
         <header className="topo">
-          <h1>{AGENDAS_MENU.find((a) => a.id === aba)?.nome || PLANILHAS_EXTRA.find((p) => p.id === aba)?.nome || ABAS.find((a) => a.id === aba)?.nome}</h1>
+          <h1>{aba === 'agenda-retro' ? 'Retrospectiva das agendas' : AGENDAS_MENU.find((a) => a.id === aba)?.nome || PLANILHAS_EXTRA.find((p) => p.id === aba)?.nome || ABAS.find((a) => a.id === aba)?.nome}</h1>
           <div className="topo-acoes">
             <div className="seg visao" title="Visão">
               <button className={app.visao === 'casal' ? 'on' : ''} onClick={() => app.setVisao('casal')}>Casal</button>
@@ -124,6 +128,7 @@ function Shell() {
               {AGENDAS_MENU.map((a) => (
                 <button key={a.id} className={'agenda-chip' + (aba === a.id ? ' ativo' : '')} style={{ '--c': a.cor }} onClick={() => setAba(a.id)}>{a.icone} {a.curto}</button>
               ))}
+              <button className={'agenda-chip' + (aba === 'agenda-retro' ? ' ativo' : '')} style={{ '--c': '#10b981' }} onClick={() => setAba('agenda-retro')}>📊 Retrospectiva</button>
             </div>
             <a className="natal-chip so-mobile" href="/carretinha.html">🎄 Carretinha</a>
             <button className="btn primario so-desktop" onClick={() => setNovo('despesa')}>+ Novo lançamento</button>

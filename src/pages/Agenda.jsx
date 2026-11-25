@@ -21,9 +21,13 @@ const SEMANA_LONGA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta
 const hora = (h) => (h ? h.slice(0, 5) : '')
 const diaSemana = (iso) => SEMANA_LONGA[new Date(iso + 'T12:00').getDay()]
 
-export default function Agenda({ agenda }) {
+export const GERAL = { nome: 'Agenda Geral', curto: 'Geral', icone: '🗓️', cor: '#6366f1',
+  categorias: [...new Set(Object.values(AGENDAS).flatMap((a) => a.categorias))] }
+
+export default function Agenda({ agenda, irPara }) {
   const app = useApp()
-  const modelo = AGENDAS[agenda]
+  const geral = agenda === 'geral'
+  const modelo = geral ? GERAL : AGENDAS[agenda]
   const [itens, setItens] = useState(null)
   const [erroTab, setErroTab] = useState(null)
   const [mes, setMes] = useState(mesISO())
@@ -34,10 +38,12 @@ export default function Agenda({ agenda }) {
   const hoje = hojeISO()
 
   const carregar = useCallback(async () => {
-    const { data, error } = await supabase.from('agenda_itens').select('*').eq('agenda', agenda)
+    let q = supabase.from('agenda_itens').select('*')
+    if (!geral) q = q.eq('agenda', agenda)
+    const { data, error } = await q
       .order('data').order('hora', { nullsFirst: true }).order('created_at').limit(20000)
     if (error) { setErroTab(erroMsg(error)); setItens([]) } else { setErroTab(null); setItens(data) }
-  }, [agenda])
+  }, [agenda, geral])
   useEffect(() => { setItens(null); setDia(null); carregar() }, [carregar])
 
   const [y, m] = mes.split('-').map(Number)
@@ -109,7 +115,8 @@ export default function Agenda({ agenda }) {
         <b>{i.hora && <span className="ag-hora">{hora(i.hora)}{i.hora_fim ? '–' + hora(i.hora_fim) : ''}</span>}{i.titulo}</b>
         <small>
           {comData && <span>📅 {dataBR(i.data)}</span>}
-          {i.categoria && <span className="ag-cat" style={{ borderColor: modelo.cor + '66', color: modelo.cor }}>{i.categoria}</span>}
+            {geral && <span className="ag-cat" style={{ borderColor: AGENDAS[i.agenda].cor + '66', color: AGENDAS[i.agenda].cor }}>{AGENDAS[i.agenda].icone} {AGENDAS[i.agenda].curto}</span>}
+          {i.categoria && <span className="ag-cat" style={{ borderColor: (AGENDAS[i.agenda]?.cor || modelo.cor) + '66', color: AGENDAS[i.agenda]?.cor || modelo.cor }}>{i.categoria}</span>}
           {i.local && <span>📍 {i.local}</span>}
           {i.status === 'cancelado' && <span className="badge">Cancelado</span>}
           {i.data < hoje && i.status === 'pendente' && <span className="badge st-atrasado">Atrasado</span>}
@@ -123,7 +130,8 @@ export default function Agenda({ agenda }) {
   return (
     <div className="pagina">
       <p className="dica destaque" style={{ background: modelo.cor + '1a', color: '#e2e8f0' }}>
-        {modelo.icone} <b>{modelo.nome}</b> — programe o que vai fazer e marque ✔ o que já fez. Só você vê os itens da sua agenda.
+        {modelo.icone} <b>{modelo.nome}</b> — {geral ? 'tudo o que está marcado nas agendas Prefeitura, Pessoal e Igreja, num calendário só.' : 'programe o que vai fazer e marque ✔ o que já fez.'} Só você vê os itens da sua agenda.
+        {irPara && <button className="link" style={{ margin: '0 0 0 8px' }} onClick={() => irPara('agenda-retro')}>📊 Ver retrospectiva</button>}
       </p>
 
       <div className="kpis">
@@ -152,6 +160,7 @@ export default function Agenda({ agenda }) {
                   style={its.length ? { background: modelo.cor + (pend ? '33' : '1a') } : undefined}
                   onClick={() => setDia(dia === d ? null : d)}>
                   <span className="n">{k + 1}</span>
+                  {geral && its.length > 0 && <span className="ag-pontos">{[...new Set(its.map((i) => i.agenda))].map((a) => <i key={a} style={{ background: AGENDAS[a].cor }} />)}</span>}
                   {its.length > 0 && <small>{pend ? `${pend} a fazer` : `✔ ${feitos}`}</small>}
                 </button>
               )
@@ -209,6 +218,9 @@ export default function Agenda({ agenda }) {
 // Linha rápida para programar um compromisso
 function NovoItem({ agenda, modelo, dataInicial, aoSalvar }) {
   const app = useApp()
+  const geral = agenda === 'geral'
+  const [qual, setQual] = useState('pessoal')
+  const cats = geral ? AGENDAS[qual].categorias : modelo.categorias
   const [titulo, setTitulo] = useState('')
   const [data, setData] = useState(dataInicial)
   const [h, setH] = useState('')
@@ -225,7 +237,7 @@ function NovoItem({ agenda, modelo, dataInicial, aoSalvar }) {
     if (!data) return app.avisar('Informe a data.', 'erro')
     setSalvando(true)
     const { error } = await supabase.from('agenda_itens').insert({
-      casal_id: app.casal.id, user_id: app.uid, agenda, titulo: titulo.trim(), data, hora: h || null,
+      casal_id: app.casal.id, user_id: app.uid, agenda: geral ? qual : agenda, titulo: titulo.trim(), data, hora: h || null,
       categoria: categoria || null, local: local.trim() || null, observacao: obs.trim() || null,
       status: data < hojeISO() ? 'feito' : 'pendente',
     })
@@ -238,12 +250,19 @@ function NovoItem({ agenda, modelo, dataInicial, aoSalvar }) {
 
   return (
     <form className="card ag-novo" onSubmit={adicionar}>
-      <input className="ag-titulo" placeholder={`O que vai fazer? (${modelo.categorias[0].toLowerCase()}, …)`} value={titulo} onChange={(e) => setTitulo(e.target.value)} />
+      {geral && (
+        <div className="seg ag-qual">
+          {Object.entries(AGENDAS).map(([k, a]) => (
+            <button type="button" key={k} className={qual === k ? 'on' : ''} style={qual === k ? { background: a.cor + '40' } : undefined} onClick={() => { setQual(k); setCategoria('') }}>{a.icone} {a.curto}</button>
+          ))}
+        </div>
+      )}
+      <input className="ag-titulo" placeholder={`O que vai fazer? (${cats[0].toLowerCase()}, …)`} value={titulo} onChange={(e) => setTitulo(e.target.value)} />
       <input type="date" value={data} onChange={(e) => setData(e.target.value)} aria-label="Data" />
       <input type="time" value={h} onChange={(e) => setH(e.target.value)} aria-label="Hora" />
       <select value={categoria} onChange={(e) => setCategoria(e.target.value)} aria-label="Categoria">
         <option value="">Categoria…</option>
-        {modelo.categorias.map((c) => <option key={c}>{c}</option>)}
+        {cats.map((c) => <option key={c}>{c}</option>)}
       </select>
       <input placeholder="Local" value={local} onChange={(e) => setLocal(e.target.value)} />
       <input placeholder="Observação" value={obs} onChange={(e) => setObs(e.target.value)} />
@@ -253,8 +272,9 @@ function NovoItem({ agenda, modelo, dataInicial, aoSalvar }) {
   )
 }
 
-function EditarItem({ item, modelo, fechar, aoSalvar }) {
+function EditarItem({ item, modelo: _m, fechar, aoSalvar }) {
   const app = useApp()
+  const modelo = AGENDAS[item.agenda] || _m
   const [f, setF] = useState({
     titulo: item.titulo, data: item.data, hora: hora(item.hora), hora_fim: hora(item.hora_fim),
     categoria: item.categoria || '', local: item.local || '', observacao: item.observacao || '', status: item.status,
