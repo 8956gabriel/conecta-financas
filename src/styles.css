@@ -440,3 +440,5 @@ table.planilha { width: 100%; border-collapse: collapse; font-size: 13.5px; font
   .retro-lista[open] summary ~ *, .retro-lista summary ~ * { display: block; }
   small, .pequeno-txt, .retro-grandes span { color: #444; }
 }
+.planilha.resumo tr.sel { background: #6366f122; }
+.planilha.resumo th { position: static; }

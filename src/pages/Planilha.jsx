@@ -86,7 +86,7 @@ export default function Planilha({ irPara, separada = false }) {
     const b = busca.trim().toLowerCase()
     return linhas
       .filter((r) => tipo === 'todos' || r.tipo === tipo)
-      .filter((r) => !categoria || r.categoria_id === categoria)
+      .filter((r) => !categoria || chaveCat(app, r) === categoria)
       .filter((r) => !pagFiltro || (pagFiltro === '-' ? !r.pagamento : r.pagamento === pagFiltro))
       .filter((r) => !b || r.descricao.toLowerCase().includes(b) || r.obs.toLowerCase().includes(b) || r.pessoa.toLowerCase().includes(b))
   }, [linhas, tipo, categoria, pagFiltro, busca])
@@ -122,18 +122,28 @@ export default function Planilha({ irPara, separada = false }) {
 
   const somaVis = (t) => visiveis.filter((r) => r.tipo === t).reduce((s, r) => s + r.valor, 0)
 
-  // Gastos por categoria no mês
+  // Cálculo por categoria no mês (junta categorias com o mesmo nome)
   const porCategoria = useMemo(() => {
     const mapa = {}
     for (const r of linhas) {
-      if (r.tipo !== 'saida') continue
-      const k = r.categoria_id || 'sem'
-      mapa[k] = (mapa[k] || 0) + r.valor
+      if (r.tipo === 'deposito') continue
+      const k = chaveCat(app, r)
+      const c = app.cat(r.categoria_id)
+      const g = (mapa[k] ||= { k, nome: c?.nome?.trim() || 'Sem categoria', cor: c?.cor || '#64748b', qtd: 0, entrada: 0, saida: 0, pix: 0, dinheiro: 0, outros: 0 })
+      g.qtd++
+      if (r.tipo === 'entrada') { g.entrada += r.valor; continue }
+      g.saida += r.valor
+      if (r.pagamento === 'Pix') g.pix += r.valor
+      else if (r.pagamento === 'Dinheiro') g.dinheiro += r.valor
+      else g.outros += r.valor
     }
-    return Object.entries(mapa)
-      .map(([id, total]) => ({ id, total, c: app.cat(id) }))
-      .sort((a, b) => b.total - a.total)
+    return Object.values(mapa).sort((a, b) => b.saida - a.saida || b.entrada - a.entrada)
   }, [linhas, app])
+  const opcoesCat = useMemo(() => {
+    const m = new Map()
+    for (const c of app.categorias) { const k = c.nome.trim().toLowerCase(); if (!m.has(k)) m.set(k, c.nome.trim()) }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  }, [app.categorias])
 
   async function salvarCampo(r, campo, valor) {
     const limpo = (valor || '').trim() || null
@@ -258,7 +268,8 @@ export default function Planilha({ irPara, separada = false }) {
         </select>
         <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
           <option value="">Todas as categorias</option>
-          {app.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome} ({c.tipo})</option>)}
+          <option value="sem">Sem categoria</option>
+          {opcoesCat.map(([k, n]) => <option key={k} value={k}>{n}</option>)}
         </select>
         {separada ? <span /> : <label className="check pequeno-txt"><input type="checkbox" checked={soPagos} onChange={(e) => setSoPagos(e.target.checked)} /> Só pago / recebido</label>}
         <div className="acoes">
@@ -336,20 +347,49 @@ export default function Planilha({ irPara, separada = false }) {
       </section>
 
       <section className="card">
-        <h3>Gastos por categoria · {nomeMes(mes)}</h3>
-        {porCategoria.length === 0 ? <p className="vazio">Nenhum gasto neste mês.</p> : (
-          <table className="planilha resumo">
-            <tbody>
-              {porCategoria.map((p) => (
-                <tr key={p.id} className="clicavel" onClick={() => { setCategoria(p.id === 'sem' ? '' : p.id); setTipo('saida') }}>
-                  <td><i className="dot" style={{ background: p.c?.cor || '#64748b' }} />{p.c?.nome || 'Sem categoria'}</td>
-                  <td className="num">{tot.saida ? Math.round((p.total / tot.saida) * 100) : 0}%</td>
-                  <td className="num txt-vermelho">{brl(p.total)}</td>
+        <h3>Entrada e saída por categoria · {nomeMes(mes)}</h3>
+        {porCategoria.length === 0 ? <p className="vazio">Nada lançado neste mês.</p> : (
+          <div className="planilha-scroll">
+            <table className="planilha resumo">
+              <thead>
+                <tr>
+                  <th>Categoria</th><th className="num">Linhas</th><th className="num">Entrada</th><th className="num">Saída</th><th className="num">Saldo</th>
+                  <th className="num">% das saídas</th><th className="num">Saída Pix</th><th className="num">Saída Dinheiro</th><th className="num">Saída outras</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {porCategoria.map((p) => (
+                  <tr key={p.k} className={'clicavel' + (categoria === p.k ? ' sel' : '')} title="Clique para ver só essa categoria na planilha"
+                    onClick={() => { setCategoria(categoria === p.k ? '' : p.k); setTipo('todos') }}>
+                    <td><i className="dot" style={{ background: p.cor }} />{p.nome}</td>
+                    <td className="num">{p.qtd}</td>
+                    <td className="num txt-verde"><b>{p.entrada ? brl(p.entrada) : ''}</b></td>
+                    <td className="num txt-vermelho"><b>{p.saida ? brl(p.saida) : ''}</b></td>
+                    <td className={'num ' + (p.entrada - p.saida < 0 ? 'txt-vermelho' : 'txt-verde')}>{brl(p.entrada - p.saida)}</td>
+                    <td className="num">{p.saida && tot.saida ? Math.round((p.saida / tot.saida) * 100) + '%' : ''}</td>
+                    <td className="num pag-pix">{p.pix ? brl(p.pix) : ''}</td>
+                    <td className="num pag-dinheiro">{p.dinheiro ? brl(p.dinheiro) : ''}</td>
+                    <td className="num">{p.outros ? brl(p.outros) : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>Total</td>
+                  <td className="num">{porCategoria.reduce((s, p) => s + p.qtd, 0)}</td>
+                  <td className="num txt-verde">{brl(tot.entrada)}</td>
+                  <td className="num txt-vermelho">{brl(tot.saida)}</td>
+                  <td className={'num ' + (tot.saldo < 0 ? 'txt-vermelho' : 'txt-verde')}>{brl(tot.saldo)}</td>
+                  <td className="num">100%</td>
+                  <td className="num pag-pix">{brl(porCategoria.reduce((s, p) => s + p.pix, 0))}</td>
+                  <td className="num pag-dinheiro">{brl(porCategoria.reduce((s, p) => s + p.dinheiro, 0))}</td>
+                  <td className="num">{brl(porCategoria.reduce((s, p) => s + p.outros, 0))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         )}
+        <p className="dica">Categorias com o mesmo nome são somadas juntas. Clique numa categoria para ver só as linhas dela.</p>
       </section>
 
       {editar && <NovoLancamento editar={editar} fechar={() => setEditar(null)} />}
@@ -381,12 +421,20 @@ function erroColuna(e) {
   return m
 }
 
+// Chave da categoria pelo nome (assim "C" e "c" repetidas somam juntas)
+function chaveCat(app, r) {
+  return app.cat(r.categoria_id)?.nome?.trim().toLowerCase() || 'sem'
+}
+
 // Acha a categoria pelo nome (sem ligar para maiúsculas) ou cria uma nova. Devolve o id.
 async function garantirCategoria(app, nome, tipoLanc) {
   const n = nome.trim()
   if (!n) return null
   const achou = app.categorias.find((c) => c.tipo === tipoLanc && c.nome.trim().toLowerCase() === n.toLowerCase())
   if (achou) return achou.id
+  // confere no banco também (evita criar repetida quando duas linhas mudam ao mesmo tempo)
+  const { data: ja } = await supabase.from('categorias').select('id,nome').eq('tipo', tipoLanc).ilike('nome', n.replace(/[%_]/g, '\\$&'))
+  if (ja?.length) return ja[0].id
   const cores = ['#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7', '#ec4899', '#ef4444', '#14b8a6']
   const { data, error } = await supabase.from('categorias')
     .insert({ casal_id: app.casal.id, nome: n, tipo: tipoLanc, cor: cores[Math.floor(Math.random() * cores.length)] })
