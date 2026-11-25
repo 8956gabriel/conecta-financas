@@ -27,6 +27,7 @@ export default function Planilha({ irPara, separada = false }) {
   const [tipo, setTipo] = useState('todos') // todos | entrada | saida | deposito
   const [categoria, setCategoria] = useState('')
   const [busca, setBusca] = useState('')
+  const [pagFiltro, setPagFiltro] = useState('')
   const [soPagos, setSoPagos] = useState(false)
   const [editar, setEditar] = useState(null)
   const [excluirDep, setExcluirDep] = useState(null) // depósito (app) ou item (planilha 2)
@@ -40,6 +41,7 @@ export default function Planilha({ irPara, separada = false }) {
           id: i.id, origem: 'item', i, data: i.data, criado: i.created_at, tipo: i.tipo,
           descricao: i.descricao || (i.tipo === 'deposito' ? 'Depósito' : '—'),
           categoria_id: i.categoria_id, obs: i.observacao || '', valor: Number(i.valor), user_id: i.user_id,
+          pagamento: i.pagamento || '', pessoa: i.pessoa || '',
         }))
     }
     const lancs = app.lancamentos
@@ -51,6 +53,7 @@ export default function Planilha({ irPara, separada = false }) {
         tipo: l.tipo === 'receita' ? 'entrada' : 'saida',
         descricao: l.descricao + (l.parcela_total > 1 ? ` (${l.parcela_num}/${l.parcela_total})` : ''),
         categoria_id: l.categoria_id, obs: l.observacao || '', valor: Number(l.valor), user_id: l.user_id,
+        pagamento: l.pagamento || (l.cartao_id ? 'Cartão' : ''), pessoa: l.pessoa || '',
       }))
     const deps = (app.movimentos || [])
       .filter(app.filtra)
@@ -61,6 +64,7 @@ export default function Planilha({ irPara, separada = false }) {
           id: m.id, origem: 'dep', m, meta, data: m.data, criado: m.created_at, tipo: 'deposito',
           descricao: (Number(m.valor) < 0 ? 'Retirada · ' : 'Depósito · ') + (meta ? `${meta.icone || ''} ${meta.nome}`.trim() : 'Reserva'),
           categoria_id: null, obs: m.descricao || '', valor: Number(m.valor), user_id: m.user_id,
+          pagamento: '', pessoa: '',
         }
       })
     return [...lancs, ...deps].sort((a, b) => a.data.localeCompare(b.data) || (a.criado || '').localeCompare(b.criado || ''))
@@ -83,8 +87,27 @@ export default function Planilha({ irPara, separada = false }) {
     return linhas
       .filter((r) => tipo === 'todos' || r.tipo === tipo)
       .filter((r) => !categoria || r.categoria_id === categoria)
-      .filter((r) => !b || r.descricao.toLowerCase().includes(b) || r.obs.toLowerCase().includes(b))
-  }, [linhas, tipo, categoria, busca])
+      .filter((r) => !pagFiltro || (pagFiltro === '-' ? !r.pagamento : r.pagamento === pagFiltro))
+      .filter((r) => !b || r.descricao.toLowerCase().includes(b) || r.obs.toLowerCase().includes(b) || r.pessoa.toLowerCase().includes(b))
+  }, [linhas, tipo, categoria, pagFiltro, busca])
+
+  // Quanto saiu em Pix, Dinheiro etc. no mês
+  const porPagamento = useMemo(() => {
+    const mapa = {}
+    for (const r of linhas) {
+      if (r.tipo !== 'saida' || !r.pagamento) continue
+      mapa[r.pagamento] = (mapa[r.pagamento] || 0) + r.valor
+    }
+    return Object.entries(mapa).sort((a, b) => b[1] - a[1])
+  }, [linhas])
+
+  // Nomes já usados (para sugerir ao digitar)
+  const nomesUsados = useMemo(() => {
+    const s = new Set((app.membros || []).map((m) => m.nome.split(' ')[0]))
+    for (const r of linhas) if (r.pessoa) s.add(r.pessoa)
+    for (const l of app.lancamentos) if (l.pessoa) s.add(l.pessoa)
+    return [...s].sort((a, b) => a.localeCompare(b))
+  }, [linhas, app.lancamentos, app.membros])
 
   // Saldo acumulado linha a linha (só entradas e saídas; depósitos ficam separados)
   const comSaldo = useMemo(() => {
@@ -113,17 +136,17 @@ export default function Planilha({ irPara, separada = false }) {
   }, [linhas, app])
 
   async function salvarCampo(r, campo, valor) {
+    const limpo = (valor || '').trim() || null
+    const upd = { obs: { observacao: limpo }, categoria: { categoria_id: limpo }, pagamento: { pagamento: limpo }, pessoa: { pessoa: limpo } }[campo]
     if (r.origem === 'item') {
-      const upd = campo === 'obs' ? { observacao: valor.trim() || null } : { categoria_id: valor || null }
       const { error } = await supabase.from('planilha_itens').update(upd).eq('id', r.id)
-      if (error) return app.avisar(erroMsg(error), 'erro')
+      if (error) return app.avisar(erroColuna(error), 'erro')
       await carregarItens()
       return app.avisar('Salvo')
     }
     if (r.origem === 'lanc') {
-      const upd = campo === 'obs' ? { observacao: valor.trim() || null } : { categoria_id: valor || null }
       const { error } = await supabase.from('lancamentos').update(upd).eq('id', r.id)
-      if (error) return app.avisar(erroMsg(error), 'erro')
+      if (error) return app.avisar(erroColuna(error), 'erro')
     } else {
       const { error } = await supabase.from('metas_movimentos').update({ descricao: valor.trim() || null }).eq('id', r.id)
       if (error) return app.avisar(erroMsg(error), 'erro')
@@ -161,16 +184,16 @@ export default function Planilha({ irPara, separada = false }) {
   }
 
   function exportarCSV() {
-    const cab = ['Data', 'Tipo', 'Descrição', 'Categoria', 'Observação', 'Responsável', 'Entrada', 'Saída', 'Depósito', 'Saldo']
+    const cab = ['Data', 'Tipo', 'Descrição', 'Nome', 'Pix / Dinheiro', 'Categoria', 'Observação', 'Responsável', 'Entrada', 'Saída', 'Depósito', 'Saldo']
     const f = (n) => (n ? n.toFixed(2).replace('.', ',') : '')
     const q = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`
     const rows = comSaldo.map((r) => [
-      dataBR(r.data), NOME_TIPO[r.tipo], r.descricao, r.origem !== 'dep' ? app.cat(r.categoria_id)?.nome || '' : '',
+      dataBR(r.data), NOME_TIPO[r.tipo], r.descricao, r.pessoa, r.pagamento, r.origem !== 'dep' ? app.cat(r.categoria_id)?.nome || '' : '',
       r.obs, app.nomeMembro(r.user_id),
       r.tipo === 'entrada' ? f(r.valor) : '', r.tipo === 'saida' ? f(r.valor) : '', r.tipo === 'deposito' ? f(r.valor) : '',
       f(r.saldo) || '0,00',
     ])
-    rows.push([], ['', '', 'TOTAIS', '', '', '', f(tot.entrada), f(tot.saida), f(tot.depLiq), f(tot.saldo)])
+    rows.push([], ['', '', 'TOTAIS', '', '', '', '', '', f(tot.entrada), f(tot.saida), f(tot.depLiq), f(tot.saldo)])
     const csv = '﻿' + [cab, ...rows].map((l) => l.map(q).join(';')).join('\n')
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
@@ -179,7 +202,7 @@ export default function Planilha({ irPara, separada = false }) {
     URL.revokeObjectURL(a.href)
   }
 
-  const temFiltro = tipo !== 'todos' || categoria || busca
+  const temFiltro = tipo !== 'todos' || categoria || busca || pagFiltro
 
   if (separada && itens === null) return <div className="center" style={{ minHeight: 200 }}><div className="spinner" /></div>
   if (separada && erroTab) return (
@@ -207,16 +230,31 @@ export default function Planilha({ irPara, separada = false }) {
         Sobra depois dos depósitos: <b className={tot.saldo - tot.depLiq < 0 ? 'txt-vermelho' : 'txt-verde'}>{brl(tot.saldo - tot.depLiq)}</b>
         {' '}— é o saldo do mês menos o que foi depositado.
       </p>
+      {porPagamento.length > 0 && (
+        <div className="pag-resumo">
+          <span className="pequeno-txt">Saiu por forma:</span>
+          {porPagamento.map(([f, v]) => (
+            <button key={f} className={'pag-chip pag-' + f.toLowerCase() + (pagFiltro === f ? ' on' : '')}
+              onClick={() => { setPagFiltro(pagFiltro === f ? '' : f); setTipo('saida') }}>{f} <b>{brl(v)}</b></button>
+          ))}
+        </div>
+      )}
+      <Sugestoes app={app} nomes={nomesUsados} />
 
       <NovaLinha mes={mes} irPara={irPara} separada={separada} aoSalvar={carregarItens} />
 
       <div className="filtros card">
-        <input placeholder="Buscar na descrição ou observação…" value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <input placeholder="Buscar na descrição, nome ou observação…" value={busca} onChange={(e) => setBusca(e.target.value)} />
         <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
           <option value="todos">Tudo</option>
           <option value="entrada">Só entradas</option>
           <option value="saida">Só saídas</option>
           <option value="deposito">Só depósitos</option>
+        </select>
+        <select value={pagFiltro} onChange={(e) => setPagFiltro(e.target.value)}>
+          <option value="">Pix, dinheiro… (todos)</option>
+          {FORMAS_PAGAMENTO.map((f) => <option key={f} value={f}>Só {f}</option>)}
+          <option value="-">Sem forma informada</option>
         </select>
         <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
           <option value="">Todas as categorias</option>
@@ -224,7 +262,7 @@ export default function Planilha({ irPara, separada = false }) {
         </select>
         {separada ? <span /> : <label className="check pequeno-txt"><input type="checkbox" checked={soPagos} onChange={(e) => setSoPagos(e.target.checked)} /> Só pago / recebido</label>}
         <div className="acoes">
-          {temFiltro && <button className="link" onClick={() => { setTipo('todos'); setCategoria(''); setBusca('') }}>Limpar filtros</button>}
+          {temFiltro && <button className="link" onClick={() => { setTipo('todos'); setCategoria(''); setBusca(''); setPagFiltro('') }}>Limpar filtros</button>}
           <button className="btn" onClick={exportarCSV} disabled={!comSaldo.length}>⬇ Exportar (Excel/CSV)</button>
         </div>
       </div>
@@ -234,13 +272,13 @@ export default function Planilha({ irPara, separada = false }) {
           <table className="planilha">
             <thead>
               <tr>
-                <th>Data</th><th>Tipo</th><th>Descrição</th><th>Categoria</th><th className="col-obs">Observação (o que gastou)</th>
+                <th>Data</th><th>Tipo</th><th>Descrição</th><th>Nome</th><th>Pix / Dinheiro</th><th>Categoria</th><th className="col-obs">Observação (o que gastou)</th>
                 <th className="num">Entrada</th><th className="num">Saída</th><th className="num">Depósito</th><th className="num">Saldo</th><th />
               </tr>
             </thead>
             <tbody>
               {comSaldo.length === 0 && (
-                <tr><td colSpan={10} className="vazio">Nada lançado {temFiltro ? 'com esses filtros' : `em ${nomeMes(mes)}`}.</td></tr>
+                <tr><td colSpan={12} className="vazio">Nada lançado {temFiltro ? 'com esses filtros' : `em ${nomeMes(mes)}`}.</td></tr>
               )}
               {comSaldo.map((r) => (
                 <tr key={r.origem + r.id} className={'tp-' + r.tipo}>
@@ -250,13 +288,20 @@ export default function Planilha({ irPara, separada = false }) {
                     {r.descricao}
                     <small className="resp"><i className="dot" style={{ background: app.corMembro(r.user_id) }} />{app.nomeMembro(r.user_id).split(' ')[0]}</small>
                   </td>
+                  <td className="col-nome">
+                    {r.origem !== 'dep'
+                      ? <CelulaTexto valor={r.pessoa} list="pl-nomes" placeholder="Nome…" salvar={(v) => salvarCampo(r, 'pessoa', v)} />
+                      : <span className="pequeno-txt">—</span>}
+                  </td>
                   <td>
-                    {r.tipo !== 'deposito' ? (
-                      <select className="cel" value={r.categoria_id || ''} onChange={(e) => salvarCampo(r, 'categoria', e.target.value)}>
-                        <option value="">Sem categoria</option>
-                        {app.categorias.filter((c) => c.tipo === (r.tipo === 'entrada' ? 'receita' : 'despesa')).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                      </select>
-                    ) : <span className="pequeno-txt">{r.origem === 'dep' ? 'Reserva / meta' : 'Depósito'}</span>}
+                    {r.origem !== 'dep'
+                      ? <CelulaPagamento valor={r.pagamento} salvar={(v) => salvarCampo(r, 'pagamento', v)} />
+                      : <span className="pequeno-txt">—</span>}
+                  </td>
+                  <td>
+                    {r.tipo !== 'deposito'
+                      ? <CelulaCategoria r={r} salvar={(id) => salvarCampo(r, 'categoria', id)} />
+                      : <span className="pequeno-txt">{r.origem === 'dep' ? 'Reserva / meta' : 'Depósito'}</span>}
                   </td>
                   <td className="col-obs"><CelulaTexto valor={r.obs} salvar={(v) => salvarCampo(r, 'obs', v)} /></td>
                   <td className="num txt-verde">{r.tipo === 'entrada' ? brl(r.valor) : ''}</td>
@@ -276,7 +321,7 @@ export default function Planilha({ irPara, separada = false }) {
             {comSaldo.length > 0 && (
               <tfoot>
                 <tr>
-                  <td colSpan={5}>Total {temFiltro ? '(com filtros)' : 'do mês'}</td>
+                  <td colSpan={7}>Total {temFiltro ? '(com filtros)' : 'do mês'}</td>
                   <td className="num txt-verde">{brl(somaVis('entrada'))}</td>
                   <td className="num txt-vermelho">{brl(somaVis('saida'))}</td>
                   <td className="num txt-roxo">{brl(somaVis('deposito'))}</td>
@@ -287,7 +332,7 @@ export default function Planilha({ irPara, separada = false }) {
             )}
           </table>
         </div>
-        <p className="dica">Toque na observação ou na categoria para mudar direto na planilha. Os depósitos não entram no saldo: são somados na coluna própria.</p>
+        <p className="dica">Toque no nome, no Pix / Dinheiro, na categoria ou na observação para mudar direto na planilha. Na categoria dá para escrever uma nova: ela é criada na hora. Os depósitos não entram no saldo: são somados na coluna própria.</p>
       </section>
 
       <section className="card">
@@ -325,15 +370,88 @@ export default function Planilha({ irPara, separada = false }) {
 }
 
 const NOME_TIPO = { entrada: 'Entrada', saida: 'Saída', deposito: 'Depósito' }
+export const FORMAS_PAGAMENTO = ['Pix', 'Dinheiro', 'Cartão', 'Débito', 'Transferência', 'Boleto']
+
+// Mensagem clara quando o banco ainda não tem as colunas novas
+function erroColuna(e) {
+  const m = erroMsg(e)
+  if (/pagamento|pessoa/i.test(m) && /column|coluna|schema/i.test(m)) {
+    return 'Falta atualizar o banco: rode supabase/012_planilha_pagamento_nome.sql no SQL Editor do Supabase.'
+  }
+  return m
+}
+
+// Acha a categoria pelo nome (sem ligar para maiúsculas) ou cria uma nova. Devolve o id.
+async function garantirCategoria(app, nome, tipoLanc) {
+  const n = nome.trim()
+  if (!n) return null
+  const achou = app.categorias.find((c) => c.tipo === tipoLanc && c.nome.trim().toLowerCase() === n.toLowerCase())
+  if (achou) return achou.id
+  const cores = ['#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7', '#ec4899', '#ef4444', '#14b8a6']
+  const { data, error } = await supabase.from('categorias')
+    .insert({ casal_id: app.casal.id, nome: n, tipo: tipoLanc, cor: cores[Math.floor(Math.random() * cores.length)] })
+    .select('id').single()
+  if (error) throw error
+  await app.carregar()
+  app.avisar(`Categoria “${n}” criada`)
+  return data.id
+}
+
+// Listas de sugestões (uma por página) usadas pelas células da planilha
+function Sugestoes({ app, nomes }) {
+  return (
+    <>
+      <datalist id="pl-cat-receita">{app.categorias.filter((c) => c.tipo === 'receita').map((c) => <option key={c.id} value={c.nome} />)}</datalist>
+      <datalist id="pl-cat-despesa">{app.categorias.filter((c) => c.tipo === 'despesa').map((c) => <option key={c.id} value={c.nome} />)}</datalist>
+      <datalist id="pl-nomes">{nomes.map((n) => <option key={n} value={n} />)}</datalist>
+    </>
+  )
+}
+
+// Categoria: escolhe uma da lista ou escreve uma nova (é criada na hora)
+function CelulaCategoria({ r, salvar }) {
+  const app = useApp()
+  const tipoLanc = r.tipo === 'entrada' ? 'receita' : 'despesa'
+  const nomeAtual = app.cat(r.categoria_id)?.nome || ''
+  const [v, setV] = useState(nomeAtual)
+  const [base, setBase] = useState(nomeAtual)
+  if (nomeAtual !== base) { setBase(nomeAtual); setV(nomeAtual) }
+  async function fim() {
+    if (v.trim().toLowerCase() === nomeAtual.trim().toLowerCase()) { setV(nomeAtual); return }
+    try {
+      const id = await garantirCategoria(app, v, tipoLanc)
+      await salvar(id || '')
+    } catch (e) {
+      app.avisar(erroMsg(e), 'erro')
+      setV(nomeAtual)
+    }
+  }
+  return (
+    <input className="cel cel-cat" list={'pl-cat-' + tipoLanc} value={v} placeholder="Sem categoria"
+      onChange={(e) => setV(e.target.value)} onBlur={fim} onFocus={(e) => e.target.select()}
+      onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setV(nomeAtual); e.currentTarget.blur() } }} />
+  )
+}
+
+// Pix / Dinheiro / Cartão…
+function CelulaPagamento({ valor, salvar }) {
+  const opcoes = valor && !FORMAS_PAGAMENTO.includes(valor) ? [...FORMAS_PAGAMENTO, valor] : FORMAS_PAGAMENTO
+  return (
+    <select className={'cel cel-pag pag-' + (valor || 'vazio').toLowerCase()} value={valor || ''} onChange={(e) => salvar(e.target.value)}>
+      <option value="">—</option>
+      {opcoes.map((f) => <option key={f} value={f}>{f}</option>)}
+    </select>
+  )
+}
 
 // Célula de texto editável: salva ao sair do campo ou apertar Enter
-function CelulaTexto({ valor, salvar }) {
+function CelulaTexto({ valor, salvar, list, placeholder = '—' }) {
   const [v, setV] = useState(valor)
   const [base, setBase] = useState(valor)
   if (valor !== base) { setBase(valor); setV(valor) }
   const fim = () => { if (v.trim() !== (valor || '').trim()) salvar(v) }
   return (
-    <input className="cel" value={v} placeholder="—" onChange={(e) => setV(e.target.value)} onBlur={fim}
+    <input className="cel" list={list} value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={fim}
       onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setV(valor); e.currentTarget.blur() } }} />
   )
 }
@@ -349,12 +467,13 @@ function NovaLinha({ mes, irPara, separada, aoSalvar }) {
   const [meta, setMeta] = useState('')
   const [obs, setObs] = useState('')
   const [valor, setValor] = useState('')
+  const [pessoa, setPessoa] = useState('')
+  const [pagamento, setPagamento] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [mesBase, setMesBase] = useState(mes)
   if (mes !== mesBase) { setMesBase(mes); setData(dataPadrao()) }
 
   const tipoLanc = tipo === 'entrada' ? 'receita' : 'despesa'
-  const cats = app.categorias.filter((c) => c.tipo === tipoLanc)
   const contaPadrao = app.contas.find((c) => c.ativo)?.id || null
   const resp = app.visao !== 'casal' ? app.visao : app.uid
   const metaSel = meta || app.metas[0]?.id || ''
@@ -366,11 +485,16 @@ function NovaLinha({ mes, irPara, separada, aoSalvar }) {
     if (!data) return app.avisar('Informe a data.', 'erro')
     setSalvando(true)
     try {
+      // Só manda nome / forma quando preenchidos (assim funciona mesmo antes de atualizar o banco)
+      const extras = {}
+      if (pessoa.trim()) extras.pessoa = pessoa.trim()
+      if (pagamento) extras.pagamento = pagamento
+      const catId = tipo === 'deposito' ? null : await garantirCategoria(app, categoria, tipoLanc)
       if (separada) {
         if (tipo !== 'deposito' && !descricao.trim()) throw new Error('Informe a descrição.')
         const { error } = await supabase.from('planilha_itens').insert({
           casal_id: app.casal.id, user_id: resp, planilha: separada, tipo, data, descricao: descricao.trim(),
-          categoria_id: tipo === 'deposito' ? null : categoria || null, observacao: obs.trim() || null, valor: v,
+          categoria_id: catId, observacao: obs.trim() || null, valor: v, ...extras,
         })
         if (error) throw error
         await aoSalvar()
@@ -383,15 +507,15 @@ function NovaLinha({ mes, irPara, separada, aoSalvar }) {
         if (!descricao.trim()) throw new Error('Informe a descrição.')
         const { error } = await supabase.from('lancamentos').insert({
           casal_id: app.casal.id, user_id: resp, tipo: tipoLanc, descricao: descricao.trim(), valor: v, data,
-          status: 'concluido', categoria_id: categoria || null, conta_id: contaPadrao, observacao: obs.trim() || null,
+          status: 'concluido', categoria_id: catId, conta_id: contaPadrao, observacao: obs.trim() || null, ...extras,
         })
         if (error) throw error
       }
       if (!separada) await app.carregar()
       app.avisar(tipo === 'entrada' ? 'Entrada lançada' : tipo === 'saida' ? 'Saída lançada' : 'Depósito lançado')
-      setDescricao(''); setObs(''); setValor('')
+      setDescricao(''); setObs(''); setValor(''); setPessoa('')
     } catch (err) {
-      app.avisar(erroMsg(err), 'erro')
+      app.avisar(erroColuna(err), 'erro')
     } finally {
       setSalvando(false)
     }
@@ -415,11 +539,14 @@ function NovaLinha({ mes, irPara, separada, aoSalvar }) {
           </select>
         ) : <button type="button" className="btn" onClick={() => irPara?.('metas')}>Criar reserva</button>
       ) : (
-        <select value={categoria} onChange={(e) => setCategoria(e.target.value)} aria-label="Categoria">
-          <option value="">Categoria…</option>
-          {cats.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-        </select>
+        <input list={'pl-cat-' + tipoLanc} placeholder="Categoria (escolha ou escreva)" value={categoria}
+          onChange={(e) => setCategoria(e.target.value)} aria-label="Categoria" />
       )}
+      <input list="pl-nomes" placeholder="Nome" value={pessoa} onChange={(e) => setPessoa(e.target.value)} aria-label="Nome" />
+      <select value={pagamento} onChange={(e) => setPagamento(e.target.value)} aria-label="Pix ou dinheiro">
+        <option value="">Pix / Dinheiro…</option>
+        {FORMAS_PAGAMENTO.map((f) => <option key={f} value={f}>{f}</option>)}
+      </select>
       <input placeholder="Observação: o que gastou / de onde veio" value={obs} onChange={(e) => setObs(e.target.value)} />
       <input inputMode="decimal" placeholder="Valor R$" value={valor} onChange={(e) => setValor(e.target.value)} />
       <button className="btn primario" disabled={salvando}>{salvando ? 'Salvando…' : '+ Adicionar'}</button>
@@ -433,25 +560,29 @@ function EditarItem({ item, fechar, aoSalvar }) {
   const [tipo, setTipo] = useState(item.tipo)
   const [data, setData] = useState(item.data)
   const [descricao, setDescricao] = useState(item.descricao || '')
-  const [categoria, setCategoria] = useState(item.categoria_id || '')
+  const [categoria, setCategoria] = useState(app.cat(item.categoria_id)?.nome || '')
   const [obs, setObs] = useState(item.observacao || '')
   const [valor, setValor] = useState(String(item.valor).replace('.', ','))
   const [resp, setResp] = useState(item.user_id)
+  const [pessoa, setPessoa] = useState(item.pessoa || '')
+  const [pagamento, setPagamento] = useState(item.pagamento || '')
   const [erro, setErro] = useState(null)
   const [salvando, setSalvando] = useState(false)
-  const cats = app.categorias.filter((c) => c.tipo === (tipo === 'entrada' ? 'receita' : 'despesa'))
-
   async function salvar(e) {
     e.preventDefault()
     const v = num(valor)
     if (!(v > 0)) return setErro('Informe um valor maior que zero.')
     setSalvando(true)
-    const { error } = await supabase.from('planilha_itens').update({
-      tipo, data, descricao: descricao.trim(), categoria_id: tipo === 'deposito' ? null : categoria || null,
-      observacao: obs.trim() || null, valor: v, user_id: resp,
-    }).eq('id', item.id)
+    let catId = null
+    try {
+      catId = tipo === 'deposito' ? null : await garantirCategoria(app, categoria, tipo === 'entrada' ? 'receita' : 'despesa')
+    } catch (e2) { setSalvando(false); return setErro(erroMsg(e2)) }
+    const upd = { tipo, data, descricao: descricao.trim(), categoria_id: catId, observacao: obs.trim() || null, valor: v, user_id: resp }
+    if (pessoa.trim() || item.pessoa) upd.pessoa = pessoa.trim() || null
+    if (pagamento || item.pagamento) upd.pagamento = pagamento || null
+    const { error } = await supabase.from('planilha_itens').update(upd).eq('id', item.id)
     setSalvando(false)
-    if (error) return setErro(erroMsg(error))
+    if (error) return setErro(erroColuna(error))
     await aoSalvar()
     app.avisar('Linha atualizada')
     fechar()
@@ -471,13 +602,19 @@ function EditarItem({ item, fechar, aoSalvar }) {
         </div>
         <label>Descrição<input value={descricao} onChange={(e) => setDescricao(e.target.value)} /></label>
         {tipo !== 'deposito' && (
-          <label>Categoria
-            <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-              <option value="">Sem categoria</option>
-              {cats.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
+          <label>Categoria (escolha ou escreva uma nova)
+            <input list={'pl-cat-' + (tipo === 'entrada' ? 'receita' : 'despesa')} value={categoria} placeholder="Sem categoria" onChange={(e) => setCategoria(e.target.value)} />
           </label>
         )}
+        <div className="linha2">
+          <label>Nome<input list="pl-nomes" value={pessoa} onChange={(e) => setPessoa(e.target.value)} /></label>
+          <label>Pix / Dinheiro
+            <select value={pagamento} onChange={(e) => setPagamento(e.target.value)}>
+              <option value="">—</option>
+              {[...new Set([...FORMAS_PAGAMENTO, ...(pagamento ? [pagamento] : [])])].map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </label>
+        </div>
         <label>Observação (o que gastou)<input value={obs} onChange={(e) => setObs(e.target.value)} /></label>
         <label>Responsável
           <select value={resp} onChange={(e) => setResp(e.target.value)}>

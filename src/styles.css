@@ -290,7 +290,21 @@ button.badge { cursor: pointer; }
 
 /* Planilha (entradas, saídas e depósitos) */
 .txt-roxo { color: #c4b5fd; }
-.nova-linha { display: grid; grid-template-columns: auto 150px 1.2fr 1fr 1.6fr 120px auto; gap: 8px; padding: 12px; align-items: center; }
+.nova-linha { display: grid; grid-template-columns: auto 140px 1.1fr 1fr 0.9fr 130px 1.3fr 110px auto; gap: 8px; padding: 12px; align-items: center; }
+@media (max-width: 1500px) { .nova-linha { grid-template-columns: auto 140px 1fr 1fr 1fr; } .nova-linha > .btn.primario { grid-column: auto / span 1; } }
+.planilha .col-nome { min-width: 120px; }
+.planilha .col-nome .cel { width: 100%; }
+.planilha input.cel-cat { min-width: 150px; width: 100%; }
+.planilha select.cel-pag { min-width: 110px; font-weight: 600; }
+.pag-pix { color: #5eead4; }
+.pag-dinheiro { color: #86efac; }
+.pag-cartão, .pag-débito { color: #fcd34d; }
+.pag-transferência, .pag-boleto { color: #93c5fd; }
+.planilha select.cel-pag option { color: var(--txt, #e2e8f0); background: var(--card); }
+.pag-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; }
+.pag-chip { background: #ffffff0d; border: 1px solid var(--borda2); border-radius: 999px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+.pag-chip b { color: var(--txt, #e2e8f0); margin-left: 4px; }
+.pag-chip.on { border-color: var(--pri); background: #6366f126; }
 .seg button.on.deposito { background: #8b5cf633; color: #ddd6fe; }
 .planilha-card { padding: 6px; }
 .planilha-card .dica { padding: 8px 10px 6px; }
